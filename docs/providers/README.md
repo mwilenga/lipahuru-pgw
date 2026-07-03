@@ -14,6 +14,7 @@ GODIGITAL_MERCHANT_ID=
 GODIGITAL_SIGNING_SECRET=
 GODIGITAL_CALLBACK_SECRET=
 GODIGITAL_CALLBACK_URL="${APP_URL}/internal/webhooks/godigital"
+GODIGITAL_VERIFY_SSL=true
 ```
 
 Adapter: `app/Providers/Payment/GoDigital/GoDigitalProvider.php`

@@ -117,8 +117,7 @@ class GoDigitalHttpClient
             return $this->accessToken;
         }
 
-        $response = Http::baseUrl(rtrim((string) config('providers.godigital.base_url'), '/'))
-            ->timeout((int) config('providers.godigital.timeout', 30))
+        $response = $this->baseRequest()
             ->asForm()
             ->post('/oauth/token', [
                 'grant_type' => 'client_credentials',
@@ -149,8 +148,18 @@ class GoDigitalHttpClient
 
     private function client(): PendingRequest
     {
-        return Http::baseUrl(rtrim((string) config('providers.godigital.base_url'), '/'))
-            ->timeout((int) config('providers.godigital.timeout', 30))
-            ->acceptJson();
+        return $this->baseRequest()->acceptJson();
+    }
+
+    private function baseRequest(): PendingRequest
+    {
+        $request = Http::baseUrl(rtrim((string) config('providers.godigital.base_url'), '/'))
+            ->timeout((int) config('providers.godigital.timeout', 30));
+
+        if (! config('providers.godigital.verify_ssl', true)) {
+            $request = $request->withOptions(['verify' => false]);
+        }
+
+        return $request;
     }
 }
