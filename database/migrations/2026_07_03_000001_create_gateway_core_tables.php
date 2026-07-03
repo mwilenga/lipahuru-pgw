@@ -116,7 +116,7 @@ return new class extends Migration
             $table->decimal('daily_limit', 18, 4)->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
-            $table->unique(['merchant_id', 'provider_network_id']);
+            $table->unique(['merchant_id', 'provider_network_id'], 'mpp_merchant_network_uniq');
         });
 
         Schema::create('wallets', function (Blueprint $table) {
@@ -348,7 +348,7 @@ return new class extends Migration
             $table->unsignedInteger('failed_requests')->default(0);
             $table->unsignedInteger('avg_latency_ms')->default(0);
             $table->timestamps();
-            $table->unique(['payment_provider_id', 'metric_date']);
+            $table->unique(['payment_provider_id', 'metric_date'], 'ppm_provider_date_uniq');
         });
     }
 
