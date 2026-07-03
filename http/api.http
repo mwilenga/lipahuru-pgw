@@ -1,7 +1,6 @@
 ### Lipahuru + GoDigital HTTP samples
 ###
 ### Generate signed headers:
-###   cd gateway-core
 ###   php artisan gateway:sign-request POST /api/v1/payments/collections/push \
 ###     --body='{"requestId":"...","providerCode":"VODACOM","amount":10000,"currency":"TZS","msisdn":"255754123456","reference":"INV-1001"}' \
 ###     --client-id=cli_xxx --signing-secret=ss_xxx --token=eyJ...
