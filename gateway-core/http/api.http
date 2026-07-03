@@ -1,0 +1,241 @@
+### Lipahuru + GoDigital HTTP samples
+###
+### Generate signed headers:
+###   cd gateway-core
+###   php artisan gateway:sign-request POST /api/v1/payments/collections/push \
+###     --body='{"requestId":"...","providerCode":"VODACOM","amount":10000,"currency":"TZS","msisdn":"255754123456","reference":"INV-1001"}' \
+###     --client-id=cli_xxx --signing-secret=ss_xxx --token=eyJ...
+###
+### Copy the printed headers into the requests below.
+
+@lipahuruHost = http://localhost:8000
+@godigitalHost = https://uat.godigital.example.com
+
+@clientId = cli_your_client_id
+@clientSecret = cs_your_client_secret
+@signingSecret = ss_your_signing_secret
+@accessToken = paste_bearer_token_here
+@requestId = 3cf73c52-d6b0-4906-8b5d-f9a4f82b5011
+@idempotencyKey = 7a1b2c3d-e4f5-6789-abcd-ef0123456789
+@timestamp = 2026-07-03T13:00:00+03:00
+@nonce = random32charstringhere1234567890ab
+@contentSha256 = paste_base64_body_hash_here
+@signature = paste_hmac_signature_here
+@transactionId = TXN-20260419-000022
+
+###############################################################################
+# 1. LIPAHURU — OAuth token (merchant)
+###############################################################################
+
+### @name lipahuruToken
+POST {{lipahuruHost}}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}
+
+###############################################################################
+# 2. LIPAHURU — C2B push collection (merchant → Lipahuru)
+###############################################################################
+
+POST {{lipahuruHost}}/api/v1/payments/collections/push
+Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Idempotency-Key: {{idempotencyKey}}
+X-Timestamp: {{timestamp}}
+X-Nonce: {{nonce}}
+X-Content-SHA256: {{contentSha256}}
+X-Signature: {{signature}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "requestId": "{{requestId}}",
+  "providerCode": "VODACOM",
+  "amount": 10000.00,
+  "currency": "TZS",
+  "msisdn": "255754123456",
+  "reference": "INV-1001",
+  "callbackUrl": "https://merchant.example.com/api/payment-result",
+  "narration": "Invoice INV-1001"
+}
+
+###############################################################################
+# 3. LIPAHURU — B2C disbursement (merchant → Lipahuru)
+###############################################################################
+
+POST {{lipahuruHost}}/api/v1/payments/disbursements
+Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Idempotency-Key: {{idempotencyKey}}
+X-Timestamp: {{timestamp}}
+X-Nonce: {{nonce}}
+X-Content-SHA256: {{contentSha256}}
+X-Signature: {{signature}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "requestId": "6e3c1d3d-6b96-4e08-8a7d-c4968ea6905a",
+  "providerCode": "YAS",
+  "amount": 25000.00,
+  "currency": "TZS",
+  "msisdn": "255713123456",
+  "reference": "PAYOUT-1001",
+  "callbackUrl": "https://merchant.example.com/api/payment-result",
+  "narration": "Customer refund"
+}
+
+###############################################################################
+# 4. LIPAHURU — Query transaction status
+###############################################################################
+
+GET {{lipahuruHost}}/api/v1/payments/{{transactionId}}
+Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Timestamp: {{timestamp}}
+X-Nonce: {{nonce}}
+X-Content-SHA256: 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
+X-Signature: {{signature}}
+Accept: application/json
+
+###############################################################################
+# 5. GODIGITAL UPSTREAM — OAuth token (Lipahuru → GoDigital)
+#    Lipahuru calls this internally via GoDigitalHttpClient
+###############################################################################
+
+### @name godigitalToken
+POST {{godigitalHost}}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}
+
+###############################################################################
+# 6. GODIGITAL UPSTREAM — C2B push (Lipahuru → GoDigital)
+#    Same payload Lipahuru forwards when processing a collection
+###############################################################################
+
+POST {{godigitalHost}}/api/v1/payments/collections/push
+Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Idempotency-Key: {{idempotencyKey}}
+X-Timestamp: {{timestamp}}
+X-Nonce: {{nonce}}
+X-Content-SHA256: {{contentSha256}}
+X-Signature: {{signature}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "requestId": "3cf73c52-d6b0-4906-8b5d-f9a4f82b5011",
+  "providerCode": "VODACOM",
+  "amount": 10000.00,
+  "currency": "TZS",
+  "msisdn": "255754123456",
+  "reference": "INV-1001",
+  "callbackUrl": "http://localhost:8000/internal/webhooks/godigital",
+  "narration": "Invoice INV-1001"
+}
+
+###############################################################################
+# 7. GODIGITAL UPSTREAM — B2C disbursement (Lipahuru → GoDigital)
+###############################################################################
+
+POST {{godigitalHost}}/api/v1/payments/disbursements
+Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Idempotency-Key: {{idempotencyKey}}
+X-Timestamp: {{timestamp}}
+X-Nonce: {{nonce}}
+X-Content-SHA256: {{contentSha256}}
+X-Signature: {{signature}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "requestId": "6e3c1d3d-6b96-4e08-8a7d-c4968ea6905a",
+  "providerCode": "YAS",
+  "amount": 25000.00,
+  "currency": "TZS",
+  "msisdn": "255713123456",
+  "reference": "PAYOUT-1001",
+  "callbackUrl": "http://localhost:8000/internal/webhooks/godigital",
+  "narration": "Customer refund"
+}
+
+###############################################################################
+# 8. GODIGITAL UPSTREAM — Query transaction status
+###############################################################################
+
+GET {{godigitalHost}}/api/v1/payments/{{transactionId}}
+Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Timestamp: {{timestamp}}
+X-Nonce: {{nonce}}
+X-Content-SHA256: 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
+X-Signature: {{signature}}
+Accept: application/json
+
+###############################################################################
+# 9. GODIGITAL → LIPAHURU webhook (payment finalized callback)
+###############################################################################
+
+POST {{lipahuruHost}}/internal/webhooks/godigital
+Content-Type: application/json
+X-Callback-Id: cb-550e8400-e29b-41d4-a716-446655440000
+X-Callback-Timestamp: 2026-04-19T21:38:57+03:00
+X-Callback-Content-SHA256: paste_callback_body_hash_here
+X-Callback-Signature: paste_callback_signature_here
+
+{
+  "eventType": "PAYMENT_FINALIZED",
+  "timestamp": "2026-04-19T21:38:57+03:00",
+  "data": {
+    "transactionId": "TXN-20260419-000022",
+    "requestId": "3cf73c52-d6b0-4906-8b5d-f9a4f82b5011",
+    "providerCode": "VODACOM",
+    "operation": "C2B_USSD_PUSH",
+    "transactionStatus": "SUCCESS",
+    "amount": 10000.00,
+    "currency": "TZS",
+    "msisdn": "255754123456",
+    "reference": "INV-1001",
+    "providerTransactionId": "919994765",
+    "providerReceiptNo": "5HN31LXJQAX",
+    "message": "Transaction finalized successfully"
+  }
+}
+
+###############################################################################
+# 10. ADMIN — Login
+###############################################################################
+
+POST {{lipahuruHost}}/api/admin/v1/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "admin@lipahuru.test",
+  "password": "password"
+}
+
+###############################################################################
+# 11. ADMIN — Create merchant (returns clientId + secrets)
+###############################################################################
+
+POST {{lipahuruHost}}/api/admin/v1/merchants
+Authorization: Bearer paste_admin_token_here
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Demo Merchant Ltd",
+  "email": "demo-merchant@example.com",
+  "phone": "255700000001",
+  "default_callback_url": "https://merchant.example.com/api/payment-result"
+}

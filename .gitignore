@@ -1,0 +1,16 @@
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# SQLite dev databases
+*.sqlite
+*.sqlite-journal
+
+# Cursor / IDE
+.cursor/

@@ -1,0 +1,141 @@
+<?php
+
+namespace App\Providers\Payment\GoDigital;
+
+use App\Enums\GatewayErrorCode;
+use App\Exceptions\GatewayException;
+use App\Services\Auth\HmacSignatureService;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+
+class GoDigitalHttpClient
+{
+    private ?string $accessToken = null;
+
+    public function __construct(
+        private readonly HmacSignatureService $hmac,
+    ) {}
+
+    public function isMockMode(): bool
+    {
+        $config = config('providers.godigital');
+
+        return empty($config['client_id'])
+            || empty($config['client_secret'])
+            || empty($config['signing_secret']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function post(string $path, array $payload, bool $idempotent = true): Response
+    {
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
+
+        return $this->send('POST', $path, $body, $idempotent);
+    }
+
+    public function get(string $path): Response
+    {
+        return $this->send('GET', $path, '', false);
+    }
+
+    private function send(string $method, string $path, string $body, bool $idempotent): Response
+    {
+        $headers = $this->buildSignedHeaders($method, $path, $body, $idempotent);
+
+        $request = $this->client()->withHeaders($headers);
+
+        if ($method === 'GET') {
+            return $request->get($path);
+        }
+
+        return $request->withBody($body, 'application/json')->post($path);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function buildSignedHeaders(string $method, string $path, string $body, bool $idempotent): array
+    {
+        $clientId = (string) config('providers.godigital.client_id');
+        $signingSecret = (string) config('providers.godigital.signing_secret');
+        $requestId = (string) Str::uuid();
+        $timestamp = now()->toIso8601String();
+        $nonce = Str::random(32);
+        $contentSha256 = $this->hmac->hashRequestBody($body);
+
+        $canonical = $this->hmac->buildCanonicalString(
+            $method,
+            $path,
+            $clientId,
+            $requestId,
+            $timestamp,
+            $nonce,
+            $contentSha256,
+        );
+
+        $headers = [
+            'Authorization' => 'Bearer '.$this->token(),
+            'X-Client-Id' => $clientId,
+            'X-Request-Id' => $requestId,
+            'X-Timestamp' => $timestamp,
+            'X-Nonce' => $nonce,
+            'X-Content-SHA256' => $contentSha256,
+            'X-Signature' => $this->hmac->sign($canonical, $signingSecret),
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ];
+
+        if ($idempotent) {
+            $headers['X-Idempotency-Key'] = (string) Str::uuid();
+        }
+
+        return $headers;
+    }
+
+    private function token(): string
+    {
+        if ($this->accessToken !== null) {
+            return $this->accessToken;
+        }
+
+        $response = Http::baseUrl(rtrim((string) config('providers.godigital.base_url'), '/'))
+            ->timeout((int) config('providers.godigital.timeout', 30))
+            ->asForm()
+            ->post('/oauth/token', [
+                'grant_type' => 'client_credentials',
+                'client_id' => config('providers.godigital.client_id'),
+                'client_secret' => config('providers.godigital.client_secret'),
+            ]);
+
+        if ($response->failed()) {
+            throw new GatewayException(
+                GatewayErrorCode::GeneralError,
+                'Failed to authenticate with GoDigital: '.$response->body(),
+                502,
+            );
+        }
+
+        $this->accessToken = (string) $response->json('access_token', '');
+
+        if ($this->accessToken === '') {
+            throw new GatewayException(
+                GatewayErrorCode::GeneralError,
+                'GoDigital returned an empty access token.',
+                502,
+            );
+        }
+
+        return $this->accessToken;
+    }
+
+    private function client(): PendingRequest
+    {
+        return Http::baseUrl(rtrim((string) config('providers.godigital.base_url'), '/'))
+            ->timeout((int) config('providers.godigital.timeout', 30))
+            ->acceptJson();
+    }
+}
