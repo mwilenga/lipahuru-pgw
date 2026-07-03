@@ -130,6 +130,7 @@ Accept: application/json
 
 {
   "requestId": "3cf73c52-d6b0-4906-8b5d-f9a4f82b5011",
+  "merchantId": "your-godigital-merchant-id",
   "providerCode": "VODACOM",
   "amount": 10000.00,
   "currency": "TZS",
@@ -157,6 +158,7 @@ Accept: application/json
 
 {
   "requestId": "6e3c1d3d-6b96-4e08-8a7d-c4968ea6905a",
+  "merchantId": "your-godigital-merchant-id",
   "providerCode": "YAS",
   "amount": 25000.00,
   "currency": "TZS",

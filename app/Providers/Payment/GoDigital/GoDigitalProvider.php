@@ -36,6 +36,7 @@ class GoDigitalProvider implements PaymentProviderInterface
 
         $payload = [
             'requestId' => (string) Str::uuid(),
+            'merchantId' => $this->client->merchantId(),
             'providerCode' => strtoupper($req->providerCode),
             'amount' => (float) $req->amount,
             'currency' => $req->currency,
@@ -58,6 +59,7 @@ class GoDigitalProvider implements PaymentProviderInterface
 
         $payload = [
             'requestId' => (string) Str::uuid(),
+            'merchantId' => $this->client->merchantId(),
             'providerCode' => strtoupper($req->providerCode),
             'amount' => (float) $req->amount,
             'currency' => $req->currency,

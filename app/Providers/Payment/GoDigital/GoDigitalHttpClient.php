@@ -27,6 +27,21 @@ class GoDigitalHttpClient
             || empty($config['signing_secret']);
     }
 
+    public function merchantId(): string
+    {
+        $merchantId = (string) config('providers.godigital.merchant_id', '');
+
+        if ($merchantId === '' && ! $this->isMockMode()) {
+            throw new GatewayException(
+                GatewayErrorCode::GeneralError,
+                'GoDigital merchant ID is not configured. Set GODIGITAL_MERCHANT_ID in .env.',
+                500,
+            );
+        }
+
+        return $merchantId;
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      */
