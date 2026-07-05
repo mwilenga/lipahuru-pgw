@@ -27,6 +27,7 @@ class AdminMerchantStoreRequest extends GatewayFormRequest
             'default_currency' => ['sometimes', 'string', 'size:3', 'in:TZS'],
             'default_callback_url' => ['sometimes', 'nullable', 'url', 'max:2048'],
             'metadata' => ['sometimes', 'nullable', 'array'],
+            'owner_password' => ['sometimes', 'nullable', 'string', 'min:8', 'max:255'],
         ];
     }
 }

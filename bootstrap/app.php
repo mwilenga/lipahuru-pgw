@@ -22,11 +22,16 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->api(prepend: [
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+
         $middleware->alias([
             'gateway.headers' => \App\Http\Middleware\ValidateGatewayHeaders::class,
             'gateway.client' => \App\Http\Middleware\ResolveMerchantClient::class,
             'gateway.signature' => \App\Http\Middleware\ValidateHmacSignature::class,
             'gateway.idempotency' => \App\Http\Middleware\ValidateIdempotency::class,
+            'portal.merchant' => \App\Http\Middleware\ResolvePortalMerchant::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -7,11 +7,13 @@ use App\Http\Requests\Admin\V1\AdminMerchantStoreRequest;
 use App\Http\Requests\Admin\V1\AdminMerchantUpdateRequest;
 use App\Http\Resources\MerchantResource;
 use App\Models\Merchant;
+use App\Models\MerchantUser;
 use App\Services\Merchant\MerchantOnboardingService;
 use App\Services\Merchant\MerchantService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class AdminMerchantController extends Controller
 {
@@ -37,13 +39,29 @@ class AdminMerchantController extends Controller
 
     public function store(AdminMerchantStoreRequest $request): JsonResponse
     {
-        $result = $this->merchantOnboardingService->onboard($request->validated());
+        $data = $request->validated();
+        $ownerPassword = $data['owner_password'] ?? Str::password(12);
+        unset($data['owner_password']);
+
+        $result = $this->merchantOnboardingService->onboard($data);
+
+        MerchantUser::query()->create([
+            'merchant_id' => $result['merchant']->id,
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $ownerPassword,
+            'role' => 'owner',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
 
         return ApiResponse::success([
             'merchant' => new MerchantResource($result['merchant']),
             'clientId' => $result['client_id'],
             'clientSecret' => $result['client_secret'],
-        ], 'Merchant created successfully.');
+            'portalEmail' => $data['email'],
+            'portalPassword' => $ownerPassword,
+        ], 'Merchant created successfully. Store API and portal credentials securely — shown once.');
     }
 
     public function show(int $merchant): JsonResponse

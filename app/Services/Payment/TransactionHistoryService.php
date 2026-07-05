@@ -63,4 +63,39 @@ class TransactionHistoryService
             ->limit(100)
             ->get();
     }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    public function listAll(array $filters = []): LengthAwarePaginator
+    {
+        $perPage = (int) ($filters['perPage'] ?? 25);
+
+        return Transaction::query()
+            ->when(isset($filters['merchantId']), fn ($q) => $q->where('merchant_id', $filters['merchantId']))
+            ->when(isset($filters['status']), fn ($q) => $q->where('status', $filters['status']))
+            ->when(isset($filters['operation']), fn ($q) => $q->where('operation', $filters['operation']))
+            ->when(isset($filters['reference']), fn ($q) => $q->where('reference', $filters['reference']))
+            ->when(isset($filters['providerCode']), function ($q) use ($filters) {
+                $code = ProviderCode::tryFrom(strtoupper((string) $filters['providerCode']));
+
+                if ($code !== null) {
+                    $q->whereHas('providerNetwork', fn ($nq) => $nq->where('code', $code));
+                }
+            })
+            ->when(isset($filters['search']), function ($q) use ($filters) {
+                $search = (string) $filters['search'];
+                $q->where(function ($query) use ($search) {
+                    $query->where('reference', 'like', "%{$search}%")
+                        ->orWhere('transaction_id', 'like', "%{$search}%")
+                        ->orWhere('msisdn', 'like', "%{$search}%")
+                        ->orWhere('provider_transaction_id', 'like', "%{$search}%");
+                });
+            })
+            ->when(isset($filters['from']), fn ($q) => $q->whereDate('created_at', '>=', $filters['from']))
+            ->when(isset($filters['to']), fn ($q) => $q->whereDate('created_at', '<=', $filters['to']))
+            ->with(['providerNetwork', 'paymentProvider', 'merchant'])
+            ->latest()
+            ->paginate($perPage);
+    }
 }

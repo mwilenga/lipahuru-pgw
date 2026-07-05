@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\V1\AdminMonitoringController;
 use App\Http\Controllers\Admin\V1\AdminProviderController;
 use App\Http\Controllers\Admin\V1\AdminReportController;
 use App\Http\Controllers\Admin\V1\AdminSettlementController;
+use App\Http\Controllers\Admin\V1\AdminTransactionController;
 use App\Http\Controllers\Api\V1\CollectionController;
 use App\Http\Controllers\Api\V1\DisbursementController;
 use App\Http\Controllers\Api\V1\MerchantAuthController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WebhookController;
+use App\Http\Controllers\Portal\MerchantPortalController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/admin/v1/login', [AdminAuthController::class, 'login']);
@@ -48,6 +50,15 @@ Route::prefix('v1')->group(function (): void {
     });
 });
 
+Route::prefix('v1/portal')
+    ->middleware(['auth:merchant', 'portal.merchant'])
+    ->group(function (): void {
+        Route::get('/me', [MerchantPortalController::class, 'me']);
+        Route::get('/dashboard', [MerchantPortalController::class, 'dashboard']);
+        Route::get('/wallets', [MerchantPortalController::class, 'wallets']);
+        Route::get('/transactions', [MerchantPortalController::class, 'transactions']);
+    });
+
 Route::prefix('admin/v1')
     ->middleware(['auth:admin'])
     ->group(function (): void {
@@ -68,4 +79,6 @@ Route::prefix('admin/v1')
 
         Route::get('/settlements', [AdminSettlementController::class, 'index']);
         Route::post('/settlements/trigger', [AdminSettlementController::class, 'trigger']);
+
+        Route::get('/transactions', [AdminTransactionController::class, 'index']);
     });
