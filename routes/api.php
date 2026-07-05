@@ -67,6 +67,9 @@ Route::prefix('admin/v1')
         Route::apiResource('merchants', AdminMerchantController::class);
         Route::post('/merchants/{merchant}/approve', [AdminMerchantController::class, 'approve']);
         Route::post('/merchants/{merchant}/suspend', [AdminMerchantController::class, 'suspend']);
+        Route::get('/merchants/{merchant}/credentials', [AdminMerchantController::class, 'credentials']);
+        Route::post('/merchants/{merchant}/rotate-credentials', [AdminMerchantController::class, 'rotateCredentials']);
+        Route::post('/merchants/{merchant}/reset-portal-password', [AdminMerchantController::class, 'resetPortalPassword']);
 
         Route::get('/providers', [AdminProviderController::class, 'providers']);
         Route::get('/networks', [AdminProviderController::class, 'networks']);

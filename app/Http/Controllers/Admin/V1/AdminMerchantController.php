@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\V1\AdminMerchantUpdateRequest;
 use App\Http\Resources\MerchantResource;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Services\Merchant\MerchantCredentialService;
 use App\Services\Merchant\MerchantOnboardingService;
 use App\Services\Merchant\MerchantService;
 use App\Support\ApiResponse;
@@ -99,5 +100,39 @@ class AdminMerchantController extends Controller
         $suspended = $this->merchantService->suspend($model, $request->input('reason'));
 
         return ApiResponse::success(new MerchantResource($suspended), 'Merchant suspended successfully.');
+    }
+
+    public function credentials(int $merchant, MerchantCredentialService $credentialService): JsonResponse
+    {
+        $model = $this->merchantService->findById($merchant);
+
+        return ApiResponse::success(
+            array_merge(
+                ['merchant' => new MerchantResource($model)],
+                $credentialService->summary($model),
+            ),
+        );
+    }
+
+    public function rotateCredentials(int $merchant, MerchantCredentialService $credentialService): JsonResponse
+    {
+        $model = $this->merchantService->findById($merchant);
+        $credentials = $credentialService->rotateApiCredentials($model);
+
+        return ApiResponse::success(
+            $credentials,
+            'API credentials regenerated. Share the new client secret with the merchant now — it will not be shown again.',
+        );
+    }
+
+    public function resetPortalPassword(int $merchant, MerchantCredentialService $credentialService): JsonResponse
+    {
+        $model = $this->merchantService->findById($merchant);
+        $credentials = $credentialService->resetPortalPassword($model);
+
+        return ApiResponse::success(
+            $credentials,
+            'Portal password reset. Share the new password with the merchant now — it will not be shown again.',
+        );
     }
 }
