@@ -26,7 +26,6 @@ class WebhookController extends Controller
 
         return ApiResponse::success(
             new WebhookResource($webhook),
-            requestId: (string) $request->header('X-Request-Id'),
         );
     }
 
@@ -39,7 +38,6 @@ class WebhookController extends Controller
 
         return ApiResponse::success(
             WebhookResource::collection($webhooks),
-            requestId: (string) $request->header('X-Request-Id'),
         );
     }
 
@@ -52,7 +50,6 @@ class WebhookController extends Controller
 
         return ApiResponse::success(
             ['deliveryId' => $delivery->id, 'status' => $delivery->status],
-            requestId: (string) $request->header('X-Request-Id'),
         );
     }
 }

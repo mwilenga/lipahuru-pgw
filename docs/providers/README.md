@@ -11,11 +11,11 @@ GODIGITAL_BASE_URL=https://your-godigital-uat-host
 GODIGITAL_CLIENT_ID=
 GODIGITAL_CLIENT_SECRET=
 GODIGITAL_MERCHANT_ID=
-GODIGITAL_SIGNING_SECRET=
-GODIGITAL_CALLBACK_SECRET=
 GODIGITAL_CALLBACK_URL="${APP_URL}/internal/webhooks/godigital"
 GODIGITAL_VERIFY_SSL=true
 ```
+
+Outbound calls to GoDigital use `GODIGITAL_CLIENT_SECRET` for HMAC signing. Inbound GoDigital callbacks are accepted without signature verification.
 
 Adapter: `app/Providers/Payment/GoDigital/GoDigitalProvider.php`
 

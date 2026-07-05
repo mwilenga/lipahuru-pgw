@@ -49,9 +49,7 @@ Contact Lipahuru to register your business. After approval you will receive:
 | Credential | Purpose | Shown again? |
 |------------|---------|--------------|
 | `client_id` | OAuth2 client identifier | No — store securely |
-| `client_secret` | OAuth2 client secret | **Once only** |
-| `signing_secret` | HMAC request signing | **Once only** |
-| `callback_secret` | Verify Lipahuru webhooks | **Once only** |
+| `client_secret` | OAuth2 token + HMAC request signing | **Once only** |
 
 Your merchant account must be **ACTIVE** before payment APIs will work.
 
@@ -59,9 +57,8 @@ Your merchant account must be **ACTIVE** before payment APIs will work.
 
 - [ ] Store credentials in a secrets manager (never in source code)
 - [ ] Implement OAuth token retrieval
-- [ ] Implement HMAC request signing
+- [ ] Implement HMAC request signing with `client_secret`
 - [ ] Expose an HTTPS callback endpoint
-- [ ] Verify webhook signatures from Lipahuru
 - [ ] Handle idempotency and duplicate callbacks safely
 - [ ] Test in UAT before going live
 
@@ -69,10 +66,10 @@ Your merchant account must be **ACTIVE** before payment APIs will work.
 
 ## 3. Authentication
 
-Every payment API call uses **two layers** of authentication:
+Every payment API call uses **two headers**:
 
 1. **Bearer token** — obtained via OAuth2 client credentials
-2. **HMAC signature** — proves request integrity and prevents tampering
+2. **HMAC signature** — signed with your `client_secret`
 
 ### 3.1 Obtain access token
 
@@ -100,11 +97,6 @@ Tokens expire after **900 seconds (15 minutes)**. Cache the token and refresh be
 | Header | Required | Description |
 |--------|----------|-------------|
 | `Authorization` | Yes | `Bearer {access_token}` |
-| `X-Client-Id` | Yes | Your `client_id` |
-| `X-Request-Id` | Yes | Unique UUID per request (traceability) |
-| `X-Timestamp` | Yes | ISO-8601 datetime with timezone, e.g. `2026-07-03T14:30:00+03:00` |
-| `X-Nonce` | Yes | Unique random string (replay protection) |
-| `X-Content-SHA256` | Yes | Base64-encoded SHA-256 hash of the raw request body |
 | `X-Signature` | Yes | Base64 HMAC-SHA256 signature (see §3.3) |
 | `X-Idempotency-Key` | Payment creation only | Unique key per payment attempt |
 
@@ -115,38 +107,24 @@ Build the **canonical string** (each value on its own line):
 ```
 {HTTP_METHOD}
 {REQUEST_PATH}
-{client_id}
-{request_id}
-{timestamp}
-{nonce}
 {content_sha256}
 ```
+
+Where `content_sha256 = Base64( SHA256( raw_request_body ) )`. For **GET** requests the body is empty — hash the empty string.
 
 **Example:**
 
 ```
 POST
 /api/v1/payments/collections/push
-cli_abc123xyz
-3cf73c52-d6b0-4906-8b5d-f9a4f82b5011
-2026-07-03T14:30:00+03:00
-k8mN2pQr7sT9vWx1yZ3aB5cD7eF9gH1j
 rSBedSEdHQ8w/MunXoV5jCQ/HKS6QuVjJSfJXQwa4DY=
 ```
 
 Compute the signature:
 
 ```
-X-Signature = Base64( HMAC-SHA256( canonical_string, signing_secret ) )
+X-Signature = Base64( HMAC-SHA256( canonical_string, client_secret ) )
 ```
-
-**Body hash:**
-
-```
-X-Content-SHA256 = Base64( SHA256( raw_request_body ) )
-```
-
-For **GET** requests the body is empty — hash the empty string.
 
 ### 3.4 PHP signing example
 
@@ -155,44 +133,25 @@ function signRequest(
     string $method,
     string $path,
     string $body,
-    string $clientId,
-    string $signingSecret,
+    string $clientSecret,
     string $accessToken,
 ): array {
-    $requestId = uuid_create();
-    $timestamp = (new DateTimeImmutable('now', new DateTimeZone('Africa/Dar_es_Salaam')))->format('c');
-    $nonce = bin2hex(random_bytes(16));
     $contentSha256 = base64_encode(hash('sha256', $body, true));
 
     $canonical = implode("\n", [
         strtoupper($method),
         $path,
-        $clientId,
-        $requestId,
-        $timestamp,
-        $nonce,
         $contentSha256,
     ]);
 
-    $signature = base64_encode(hash_hmac('sha256', $canonical, $signingSecret, true));
+    $signature = base64_encode(hash_hmac('sha256', $canonical, $clientSecret, true));
 
     return [
         'Authorization' => 'Bearer ' . $accessToken,
-        'X-Client-Id' => $clientId,
-        'X-Request-Id' => $requestId,
-        'X-Timestamp' => $timestamp,
-        'X-Nonce' => $nonce,
-        'X-Content-SHA256' => $contentSha256,
         'X-Signature' => $signature,
     ];
 }
 ```
-
-### 3.5 Timestamp and replay rules
-
-- Requests must arrive within **±5 minutes** of `X-Timestamp`
-- Each `X-Nonce` may only be used **once** per `client_id` within 10 minutes
-- Keep your server clock synchronized (NTP)
 
 ---
 
@@ -482,54 +441,9 @@ When a payment reaches a final state, Lipahuru sends an HTTP POST to your callba
 }
 ```
 
-### 7.3 Verify callback signature
+### 7.3 Callback delivery
 
-Every callback includes these headers:
-
-| Header | Description |
-|--------|-------------|
-| `X-Callback-Id` | Unique delivery identifier |
-| `X-Callback-Timestamp` | Callback creation time (ISO-8601) |
-| `X-Callback-Content-SHA256` | Hex SHA-256 hash of the raw JSON body |
-| `X-Callback-Signature` | Base64 HMAC-SHA256 signature |
-
-**Verification steps:**
-
-1. Read the raw request body (do not re-serialize JSON)
-2. Compute `hexHash = SHA256(raw_body)` (lowercase hex)
-3. Confirm `hexHash == X-Callback-Content-SHA256`
-4. Build canonical string:
-   ```
-   {X-Callback-Id}
-   {X-Callback-Timestamp}
-   {hexHash}
-   ```
-5. Compute `expected = Base64( HMAC-SHA256( canonical, callback_secret ) )`
-6. Compare `expected == X-Callback-Signature` using a timing-safe comparison
-
-**PHP verification example:**
-
-```php
-function verifyCallback(Request $request, string $callbackSecret): bool
-{
-    $body = $request->getContent();
-    $callbackId = $request->header('X-Callback-Id');
-    $timestamp = $request->header('X-Callback-Timestamp');
-    $providedHash = $request->header('X-Callback-Content-SHA256');
-    $providedSignature = $request->header('X-Callback-Signature');
-
-    $hexHash = hash('sha256', $body);
-
-    if (!hash_equals($hexHash, $providedHash)) {
-        return false;
-    }
-
-    $canonical = implode("\n", [$callbackId, $timestamp, $hexHash]);
-    $expected = base64_encode(hash_hmac('sha256', $canonical, $callbackSecret, true));
-
-    return hash_equals($expected, $providedSignature);
-}
-```
+Lipahuru sends callbacks as a plain JSON `POST` with `Content-Type: application/json`. No signature headers are included — secure your callback URL (HTTPS, firewall, IP allowlist if needed).
 
 ### 7.4 Your response
 
@@ -648,7 +562,7 @@ Exceeded limits return HTTP `429` with a `Retry-After` header.
 
 ## 12. Security best practices
 
-1. **Never expose** `client_secret`, `signing_secret`, or `callback_secret` in client-side code or mobile apps
+1. **Never expose** `client_secret` in client-side code or mobile apps
 2. All API calls must originate from your **backend server**
 3. Use HTTPS for all communication
 4. Verify every webhook signature before updating order status

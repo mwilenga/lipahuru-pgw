@@ -4,17 +4,10 @@ namespace App\Services\Webhook;
 
 use App\Models\Transaction;
 use App\Models\WebhookDelivery;
-use App\Services\Auth\HmacSignatureService;
-use App\Services\Merchant\ApiCredentialService;
 use Illuminate\Support\Facades\Bus;
 
 class MerchantWebhookService
 {
-    public function __construct(
-        private readonly HmacSignatureService $hmacSignatureService,
-        private readonly ApiCredentialService $apiCredentialService,
-    ) {}
-
     public function dispatchPaymentFinalized(Transaction $transaction): WebhookDelivery
     {
         $merchant = $transaction->merchant;
@@ -25,17 +18,9 @@ class MerchantWebhookService
         }
 
         $payload = $this->buildPaymentFinalizedPayload($transaction);
-        $payloadJson = json_encode($payload, JSON_THROW_ON_ERROR);
-        $callbackSecret = $this->apiCredentialService->getCallbackSecret($merchant);
-
-        if ($callbackSecret === null) {
-            throw new \InvalidArgumentException('Merchant callback secret is not configured.');
-        }
-
-        $signature = $this->hmacSignatureService->generateCallbackSignature($payloadJson, $callbackSecret);
 
         $delivery = WebhookDelivery::query()->create([
-            'callback_id' => $signature['callback_id'],
+            'callback_id' => (string) \Illuminate\Support\Str::uuid(),
             'merchant_id' => $merchant->id,
             'transaction_id' => $transaction->id,
             'event_type' => 'PAYMENT_FINALIZED',
@@ -55,35 +40,10 @@ class MerchantWebhookService
     public function attemptDelivery(int $deliveryId): WebhookDelivery
     {
         $delivery = WebhookDelivery::query()->findOrFail($deliveryId);
-        $merchant = $delivery->merchant;
-        $callbackSecret = $this->apiCredentialService->getCallbackSecret($merchant);
-
-        if ($callbackSecret === null) {
-            $delivery->update([
-                'status' => 'FAILED',
-                'response_body' => 'Missing callback secret',
-            ]);
-
-            return $delivery->refresh();
-        }
-
-        $payloadJson = json_encode($delivery->payload, JSON_THROW_ON_ERROR);
-        $timestamp = now()->toIso8601String();
-        $contentSha256 = hash('sha256', $payloadJson);
-        $canonical = $this->hmacSignatureService->buildCallbackCanonicalString(
-            (string) $delivery->callback_id,
-            $timestamp,
-            $contentSha256,
-        );
-        $signature = $this->hmacSignatureService->sign($canonical, $callbackSecret);
 
         try {
             $response = \Illuminate\Support\Facades\Http::timeout((int) config('payment-gateway.callback_timeout', 30))
                 ->withHeaders([
-                    'X-Callback-Id' => $delivery->callback_id,
-                    'X-Callback-Timestamp' => $timestamp,
-                    'X-Callback-Content-SHA256' => $contentSha256,
-                    'X-Callback-Signature' => $signature,
                     'Content-Type' => 'application/json',
                 ])
                 ->post($delivery->url, $delivery->payload);

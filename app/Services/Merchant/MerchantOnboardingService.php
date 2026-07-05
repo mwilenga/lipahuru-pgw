@@ -25,7 +25,7 @@ class MerchantOnboardingService
 
     /**
      * @param  array<string, mixed>  $merchantData
-     * @return array{merchant: Merchant, client_id: string, client_secret: string, signing_secret: string, callback_secret: string}
+     * @return array{merchant: Merchant, client_id: string, client_secret: string}
      */
     public function onboard(array $merchantData): array
     {
@@ -47,9 +47,10 @@ class MerchantOnboardingService
 
             $this->provisionWalletHierarchy($merchant);
 
-            $credentials = $this->apiCredentialService->issue($merchant);
             $clientId = 'cli_'.Str::lower(Str::random(24));
             $clientSecret = 'cs_'.Str::random(48);
+
+            $this->apiCredentialService->issue($merchant, $clientSecret);
 
             $this->oauthClientRepository->create([
                 'merchant_id' => $merchant->id,
@@ -63,8 +64,6 @@ class MerchantOnboardingService
                 'merchant' => $merchant->refresh(),
                 'client_id' => $clientId,
                 'client_secret' => $clientSecret,
-                'signing_secret' => $credentials['signing_secret'],
-                'callback_secret' => $credentials['callback_secret'],
             ];
         });
     }

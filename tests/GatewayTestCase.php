@@ -11,7 +11,6 @@ use App\Models\ProviderNetwork;
 use App\Services\Auth\HmacSignatureService;
 use Database\Seeders\GatewaySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 abstract class GatewayTestCase extends TestCase
@@ -70,35 +69,22 @@ abstract class GatewayTestCase extends TestCase
         string $method,
         string $path,
         array $payload,
-        string $clientId,
-        string $signingSecret,
+        string $clientSecret,
         ?string $idempotencyKey = null,
     ): array {
-        $body = json_encode($payload);
+        $body = $method === 'GET' ? '' : json_encode($payload);
         $hmac = app(HmacSignatureService::class);
-        $requestId = (string) Str::uuid();
-        $timestamp = now()->toIso8601String();
-        $nonce = Str::random(32);
-        $contentSha256 = base64_encode(hash('sha256', $body, true));
+        $contentSha256 = $hmac->hashRequestBody($body);
 
         $canonical = $hmac->buildCanonicalString(
             $method,
             $path,
-            $clientId,
-            $requestId,
-            $timestamp,
-            $nonce,
             $contentSha256,
         );
 
         $headers = [
-            'Authorization' => 'Bearer '.$this->cachedToken ?? '',
-            'X-Client-Id' => $clientId,
-            'X-Request-Id' => $requestId,
-            'X-Timestamp' => $timestamp,
-            'X-Nonce' => $nonce,
-            'X-Content-SHA256' => $contentSha256,
-            'X-Signature' => $hmac->sign($canonical, $signingSecret),
+            'Authorization' => 'Bearer '.($this->cachedToken ?? ''),
+            'X-Signature' => $hmac->sign($canonical, $clientSecret),
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
         ];
@@ -120,18 +106,18 @@ abstract class GatewayTestCase extends TestCase
         array $payload,
         Merchant $merchant,
         OAuthClient $client,
-        string $signingSecret,
+        string $clientSecret,
         ?string $idempotencyKey = null,
     ) {
         if ($this->cachedToken === null) {
             $this->cachedToken = $this->getAccessToken(
                 $client->client_id,
-                $this->plainClientSecret ?? 'invalid',
+                $clientSecret,
             );
         }
 
         $fullPath = '/api'.$path;
-        $headers = $this->signedHeaders('POST', $fullPath, $payload, $client->client_id, $signingSecret, $idempotencyKey);
+        $headers = $this->signedHeaders('POST', $fullPath, $payload, $clientSecret, $idempotencyKey);
         $headers['Authorization'] = 'Bearer '.$this->cachedToken;
 
         return $this->postJson('/api'.$path, $payload, $headers);

@@ -27,7 +27,7 @@ class RefundController extends Controller
 
         return ApiResponse::success(
             new RefundResource($refund->load('transaction')),
-            requestId: (string) $request->header('X-Request-Id'),
+            requestId: (string) $request->validated('requestId'),
         );
     }
 }

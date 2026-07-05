@@ -6,6 +6,7 @@ use App\Enums\GatewayErrorCode;
 use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class ValidateGatewayHeaders
@@ -15,11 +16,6 @@ class ValidateGatewayHeaders
      */
     private const REQUIRED_HEADERS = [
         'Authorization',
-        'X-Client-Id',
-        'X-Request-Id',
-        'X-Timestamp',
-        'X-Nonce',
-        'X-Content-SHA256',
         'X-Signature',
     ];
 
@@ -43,7 +39,7 @@ class ValidateGatewayHeaders
             return ApiResponse::failed(
                 GatewayErrorCode::InvalidPayload,
                 'Missing required gateway headers: '.implode(', ', $missing),
-                (string) $request->header('X-Request-Id'),
+                (string) Str::uuid(),
                 ['missing' => $missing],
                 400,
             );

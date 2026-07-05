@@ -23,10 +23,8 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware([
         'auth:api',
-        'gateway.headers',
         'gateway.client',
-        'gateway.timestamp',
-        'gateway.nonce',
+        'gateway.headers',
         'gateway.signature',
     ])->group(function (): void {
         Route::get('/wallets', [WalletController::class, 'index']);

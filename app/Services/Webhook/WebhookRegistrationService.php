@@ -5,15 +5,12 @@ namespace App\Services\Webhook;
 use App\Models\Merchant;
 use App\Models\MerchantWebhook;
 use App\Models\WebhookDelivery;
-use App\Services\Merchant\ApiCredentialService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 
 class WebhookRegistrationService
 {
     public function __construct(
-        private readonly ApiCredentialService $apiCredentialService,
         private readonly MerchantWebhookService $merchantWebhookService,
     ) {}
 
@@ -22,12 +19,10 @@ class WebhookRegistrationService
      */
     public function register(Merchant $merchant, array $payload): MerchantWebhook
     {
-        $callbackSecret = $this->apiCredentialService->getCallbackSecret($merchant);
-
         return MerchantWebhook::query()->create([
             'merchant_id' => $merchant->id,
             'url' => $payload['url'],
-            'secret' => $callbackSecret ?? 'whsec_'.Str::random(48),
+            'secret' => null,
             'is_active' => $payload['is_active'] ?? true,
             'events' => $payload['events'] ?? ['PAYMENT_FINALIZED'],
         ]);

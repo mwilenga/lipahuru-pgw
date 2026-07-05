@@ -28,7 +28,6 @@ class TransactionController extends Controller
 
         return ApiResponse::success(
             new TransactionResource($transaction),
-            requestId: (string) $request->header('X-Request-Id'),
         );
     }
 
@@ -47,6 +46,6 @@ class TransactionController extends Controller
                 'total' => $paginator->total(),
                 'lastPage' => $paginator->lastPage(),
             ],
-        ], requestId: (string) $request->header('X-Request-Id'));
+        ]);
     }
 }

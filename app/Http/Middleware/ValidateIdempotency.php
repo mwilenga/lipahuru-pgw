@@ -9,6 +9,7 @@ use App\Services\Auth\IdempotencyService;
 use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class ValidateIdempotency
@@ -32,7 +33,7 @@ class ValidateIdempotency
             return ApiResponse::failed(
                 GatewayErrorCode::AuthenticationFailed,
                 'Merchant context is required for idempotency validation.',
-                (string) $request->header('X-Request-Id'),
+                (string) Str::uuid(),
                 httpStatus: 401,
             );
         }
@@ -46,7 +47,7 @@ class ValidateIdempotency
             return ApiResponse::failed(
                 $exception->errorCode,
                 $exception->getMessage(),
-                (string) $request->header('X-Request-Id'),
+                (string) Str::uuid(),
                 httpStatus: $exception->httpStatus,
             );
         }

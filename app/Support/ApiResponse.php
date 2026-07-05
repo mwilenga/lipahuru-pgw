@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Enums\GatewayErrorCode;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 
 class ApiResponse
 {
@@ -17,7 +18,7 @@ class ApiResponse
             'status' => 'SUCCESS',
             'code' => $code->value,
             'message' => $message,
-            'requestId' => $requestId ?? (string) request()->header('X-Request-Id', ''),
+            'requestId' => $requestId ?? (string) Str::uuid(),
             'timestamp' => now()->toIso8601String(),
             'data' => $data,
         ]);
@@ -34,7 +35,7 @@ class ApiResponse
             'status' => 'FAILED',
             'code' => $code->value,
             'message' => $message ?? $code->message(),
-            'requestId' => $requestId ?? (string) request()->header('X-Request-Id', ''),
+            'requestId' => $requestId ?? (string) Str::uuid(),
             'timestamp' => now()->toIso8601String(),
             'data' => $data,
         ], $httpStatus);

@@ -25,7 +25,6 @@ class WalletController extends Controller
 
         return ApiResponse::success(
             WalletResource::collection($wallets),
-            requestId: (string) $request->header('X-Request-Id'),
         );
     }
 
@@ -38,7 +37,6 @@ class WalletController extends Controller
 
         return ApiResponse::success(
             new WalletResource($wallet),
-            requestId: (string) $request->header('X-Request-Id'),
         );
     }
 }

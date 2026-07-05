@@ -25,7 +25,7 @@ class CollectionController extends Controller
 
         return ApiResponse::success(
             new TransactionResource($transaction),
-            requestId: (string) $request->header('X-Request-Id'),
+            requestId: (string) $request->validated('requestId'),
         );
     }
 }

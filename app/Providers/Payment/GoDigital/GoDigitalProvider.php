@@ -12,7 +12,6 @@ use App\Providers\Payment\DTOs\ProviderResponse;
 use App\Providers\Payment\DTOs\ProviderStatusResponse;
 use App\Providers\Payment\DTOs\ProviderWebhookEvent;
 use App\Providers\Payment\DTOs\RefundRequest;
-use App\Services\Auth\HmacSignatureService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -20,7 +19,6 @@ class GoDigitalProvider implements PaymentProviderInterface
 {
     public function __construct(
         private readonly GoDigitalHttpClient $client,
-        private readonly HmacSignatureService $hmac,
     ) {}
 
     public function getDriverName(): string
@@ -123,12 +121,6 @@ class GoDigitalProvider implements PaymentProviderInterface
 
     public function verifyWebhook(Request $request): ProviderWebhookEvent
     {
-        $callbackSecret = (string) config('providers.godigital.callback_secret');
-
-        if ($callbackSecret !== '' && ! $this->verifyCallbackSignature($request, $callbackSecret)) {
-            throw new GatewayException(GatewayErrorCode::SignatureFailed, 'Invalid GoDigital callback signature.', 401);
-        }
-
         $payload = $request->all();
         $data = $payload['data'] ?? $payload;
 
@@ -144,28 +136,6 @@ class GoDigitalProvider implements PaymentProviderInterface
             failureCode: $data['failureCode'] ?? null,
             failureMessage: $data['message'] ?? null,
         );
-    }
-
-    private function verifyCallbackSignature(Request $request, string $callbackSecret): bool
-    {
-        $callbackId = (string) $request->header('X-Callback-Id', '');
-        $timestamp = (string) $request->header('X-Callback-Timestamp', '');
-        $providedSignature = (string) $request->header('X-Callback-Signature', '');
-        $providedHash = (string) $request->header('X-Callback-Content-SHA256', '');
-
-        if ($callbackId === '' || $timestamp === '' || $providedSignature === '') {
-            return false;
-        }
-
-        $bodyHash = $this->hmac->hashRequestBody($request->getContent());
-
-        if (! hash_equals($bodyHash, $providedHash)) {
-            return false;
-        }
-
-        $canonical = $this->hmac->buildCallbackCanonicalString($callbackId, $timestamp, $bodyHash);
-
-        return hash_equals($this->hmac->sign($canonical, $callbackSecret), $providedSignature);
     }
 
     private function mapInitiationResponse(\Illuminate\Http\Client\Response $response, string $fallbackRef): ProviderResponse

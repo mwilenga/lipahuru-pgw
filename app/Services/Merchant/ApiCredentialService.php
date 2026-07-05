@@ -4,23 +4,19 @@ namespace App\Services\Merchant;
 
 use App\Models\ApiCredential;
 use App\Models\Merchant;
-use Illuminate\Support\Str;
 
 class ApiCredentialService
 {
     /**
-     * @return array{signing_secret: string, callback_secret: string, credential: ApiCredential}
+     * @return array{signing_secret: string, credential: ApiCredential}
      */
-    public function issue(Merchant $merchant): array
+    public function issue(Merchant $merchant, string $clientSecret): array
     {
-        $signingSecret = $this->generateSecret();
-        $callbackSecret = $this->generateSecret();
-
         $credential = ApiCredential::query()->updateOrCreate(
             ['merchant_id' => $merchant->id],
             [
-                'signing_secret' => $signingSecret,
-                'callback_secret' => $callbackSecret,
+                'signing_secret' => $clientSecret,
+                'callback_secret' => '',
                 'previous_signing_secret' => null,
                 'previous_callback_secret' => null,
                 'rotated_at' => null,
@@ -29,39 +25,35 @@ class ApiCredentialService
         );
 
         return [
-            'signing_secret' => $signingSecret,
-            'callback_secret' => $callbackSecret,
+            'signing_secret' => $clientSecret,
             'credential' => $credential,
         ];
     }
 
     /**
-     * @return array{signing_secret: string, callback_secret: string, credential: ApiCredential}
+     * @return array{signing_secret: string, credential: ApiCredential}
      */
-    public function rotate(Merchant $merchant): array
+    public function rotate(Merchant $merchant, string $newClientSecret): array
     {
         $credential = $merchant->apiCredential;
 
         if ($credential === null) {
-            return $this->issue($merchant);
+            return $this->issue($merchant, $newClientSecret);
         }
 
-        $signingSecret = $this->generateSecret();
-        $callbackSecret = $this->generateSecret();
         $graceHours = (int) config('payment-gateway.credential_rotation_grace_hours', 24);
 
         $credential->update([
             'previous_signing_secret' => $credential->signing_secret,
-            'previous_callback_secret' => $credential->callback_secret,
-            'signing_secret' => $signingSecret,
-            'callback_secret' => $callbackSecret,
+            'previous_callback_secret' => null,
+            'signing_secret' => $newClientSecret,
+            'callback_secret' => '',
             'rotated_at' => now(),
             'rotation_grace_ends_at' => now()->addHours($graceHours),
         ]);
 
         return [
-            'signing_secret' => $signingSecret,
-            'callback_secret' => $callbackSecret,
+            'signing_secret' => $newClientSecret,
             'credential' => $credential->refresh(),
         ];
     }
@@ -69,8 +61,8 @@ class ApiCredentialService
     public function revoke(Merchant $merchant): void
     {
         $merchant->apiCredential?->update([
-            'signing_secret' => $this->generateSecret(),
-            'callback_secret' => $this->generateSecret(),
+            'signing_secret' => 'revoked_'.bin2hex(random_bytes(16)),
+            'callback_secret' => '',
             'previous_signing_secret' => null,
             'previous_callback_secret' => null,
             'rotated_at' => now(),
@@ -85,6 +77,9 @@ class ApiCredentialService
             ]);
     }
 
+    /**
+     * @return list<string>
+     */
     public function getActiveSigningSecrets(Merchant $merchant): array
     {
         $credential = $merchant->apiCredential;
@@ -104,15 +99,5 @@ class ApiCredentialService
         }
 
         return $secrets;
-    }
-
-    public function getCallbackSecret(Merchant $merchant): ?string
-    {
-        return $merchant->apiCredential?->callback_secret;
-    }
-
-    private function generateSecret(): string
-    {
-        return 'sk_'.Str::random(48);
     }
 }

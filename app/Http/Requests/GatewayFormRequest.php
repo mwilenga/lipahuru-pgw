@@ -7,6 +7,7 @@ use App\Support\ApiResponse;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Str;
 
 abstract class GatewayFormRequest extends FormRequest
 {
@@ -16,7 +17,7 @@ abstract class GatewayFormRequest extends FormRequest
             ApiResponse::failed(
                 GatewayErrorCode::InvalidPayload,
                 $validator->errors()->first(),
-                (string) $this->header('X-Request-Id'),
+                (string) Str::uuid(),
                 ['errors' => $validator->errors()],
             )
         );

@@ -42,8 +42,6 @@ class MerchantAuthController extends Controller
             'merchant' => new MerchantResource($result['merchant']),
             'clientId' => $result['client_id'],
             'clientSecret' => $result['client_secret'],
-            'signingSecret' => $result['signing_secret'],
-            'callbackSecret' => $result['callback_secret'],
         ], 'Merchant registered successfully. Store credentials securely — they are shown once.');
     }
 

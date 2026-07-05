@@ -25,8 +25,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'gateway.headers' => \App\Http\Middleware\ValidateGatewayHeaders::class,
             'gateway.client' => \App\Http\Middleware\ResolveMerchantClient::class,
-            'gateway.timestamp' => \App\Http\Middleware\ValidateTimestamp::class,
-            'gateway.nonce' => \App\Http\Middleware\ValidateNonce::class,
             'gateway.signature' => \App\Http\Middleware\ValidateHmacSignature::class,
             'gateway.idempotency' => \App\Http\Middleware\ValidateIdempotency::class,
         ]);
@@ -37,7 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::failed(
                     $exception->errorCode,
                     $exception->getMessage(),
-                    (string) $request->header('X-Request-Id'),
+                    (string) \Illuminate\Support\Str::uuid(),
                     httpStatus: $exception->httpStatus,
                 );
             }
@@ -48,7 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return ApiResponse::failed(
                     GatewayErrorCode::InvalidPayload,
                     $exception->getMessage(),
-                    (string) $request->header('X-Request-Id'),
+                    (string) \Illuminate\Support\Str::uuid(),
                     ['errors' => $exception->errors()],
                 );
             }

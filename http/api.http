@@ -3,7 +3,7 @@
 ### Generate signed headers:
 ###   php artisan gateway:sign-request POST /api/v1/payments/collections/push \
 ###     --body='{"requestId":"...","providerCode":"VODACOM","amount":10000,"currency":"TZS","msisdn":"255754123456","reference":"INV-1001"}' \
-###     --client-id=cli_xxx --signing-secret=ss_xxx --token=eyJ...
+###     --client-secret=cs_xxx --token=eyJ...
 ###
 ### Copy the printed headers into the requests below.
 
@@ -12,13 +12,9 @@
 
 @clientId = cli_your_client_id
 @clientSecret = cs_your_client_secret
-@signingSecret = ss_your_signing_secret
 @accessToken = paste_bearer_token_here
 @requestId = 3cf73c52-d6b0-4906-8b5d-f9a4f82b5011
 @idempotencyKey = 7a1b2c3d-e4f5-6789-abcd-ef0123456789
-@timestamp = 2026-07-03T13:00:00+03:00
-@nonce = random32charstringhere1234567890ab
-@contentSha256 = paste_base64_body_hash_here
 @signature = paste_hmac_signature_here
 @transactionId = TXN-20260419-000022
 
@@ -38,13 +34,8 @@ grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecre
 
 POST {{lipahuruHost}}/api/v1/payments/collections/push
 Authorization: Bearer {{accessToken}}
-X-Client-Id: {{clientId}}
-X-Request-Id: {{requestId}}
-X-Idempotency-Key: {{idempotencyKey}}
-X-Timestamp: {{timestamp}}
-X-Nonce: {{nonce}}
-X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
+X-Idempotency-Key: {{idempotencyKey}}
 Content-Type: application/json
 Accept: application/json
 
@@ -65,13 +56,8 @@ Accept: application/json
 
 POST {{lipahuruHost}}/api/v1/payments/disbursements
 Authorization: Bearer {{accessToken}}
-X-Client-Id: {{clientId}}
-X-Request-Id: {{requestId}}
-X-Idempotency-Key: {{idempotencyKey}}
-X-Timestamp: {{timestamp}}
-X-Nonce: {{nonce}}
-X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
+X-Idempotency-Key: {{idempotencyKey}}
 Content-Type: application/json
 Accept: application/json
 
@@ -92,17 +78,11 @@ Accept: application/json
 
 GET {{lipahuruHost}}/api/v1/payments/{{transactionId}}
 Authorization: Bearer {{accessToken}}
-X-Client-Id: {{clientId}}
-X-Request-Id: {{requestId}}
-X-Timestamp: {{timestamp}}
-X-Nonce: {{nonce}}
-X-Content-SHA256: 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 X-Signature: {{signature}}
 Accept: application/json
 
 ###############################################################################
 # 5. GODIGITAL UPSTREAM — OAuth token (Lipahuru → GoDigital)
-#    Lipahuru calls this internally via GoDigitalHttpClient
 ###############################################################################
 
 ### @name godigitalToken
@@ -113,18 +93,12 @@ grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecre
 
 ###############################################################################
 # 6. GODIGITAL UPSTREAM — C2B push (Lipahuru → GoDigital)
-#    Same payload Lipahuru forwards when processing a collection
 ###############################################################################
 
 POST {{godigitalHost}}/api/v1/payments/collections/push
 Authorization: Bearer {{accessToken}}
-X-Client-Id: {{clientId}}
-X-Request-Id: {{requestId}}
-X-Idempotency-Key: {{idempotencyKey}}
-X-Timestamp: {{timestamp}}
-X-Nonce: {{nonce}}
-X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
+X-Idempotency-Key: {{idempotencyKey}}
 Content-Type: application/json
 Accept: application/json
 
@@ -146,13 +120,8 @@ Accept: application/json
 
 POST {{godigitalHost}}/api/v1/payments/disbursements
 Authorization: Bearer {{accessToken}}
-X-Client-Id: {{clientId}}
-X-Request-Id: {{requestId}}
-X-Idempotency-Key: {{idempotencyKey}}
-X-Timestamp: {{timestamp}}
-X-Nonce: {{nonce}}
-X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
+X-Idempotency-Key: {{idempotencyKey}}
 Content-Type: application/json
 Accept: application/json
 
@@ -174,11 +143,6 @@ Accept: application/json
 
 GET {{godigitalHost}}/api/v1/payments/{{transactionId}}
 Authorization: Bearer {{accessToken}}
-X-Client-Id: {{clientId}}
-X-Request-Id: {{requestId}}
-X-Timestamp: {{timestamp}}
-X-Nonce: {{nonce}}
-X-Content-SHA256: 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 X-Signature: {{signature}}
 Accept: application/json
 
@@ -188,10 +152,6 @@ Accept: application/json
 
 POST {{lipahuruHost}}/internal/webhooks/godigital
 Content-Type: application/json
-X-Callback-Id: cb-550e8400-e29b-41d4-a716-446655440000
-X-Callback-Timestamp: 2026-04-19T21:38:57+03:00
-X-Callback-Content-SHA256: paste_callback_body_hash_here
-X-Callback-Signature: paste_callback_signature_here
 
 {
   "eventType": "PAYMENT_FINALIZED",
@@ -226,7 +186,7 @@ Accept: application/json
 }
 
 ###############################################################################
-# 11. ADMIN — Create merchant (returns clientId + secrets)
+# 11. ADMIN — Create merchant (returns clientId + clientSecret)
 ###############################################################################
 
 POST {{lipahuruHost}}/api/admin/v1/merchants

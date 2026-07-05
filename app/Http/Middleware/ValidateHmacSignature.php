@@ -8,6 +8,7 @@ use App\Services\Auth\HmacSignatureService;
 use App\Support\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class ValidateHmacSignature
@@ -25,19 +26,7 @@ class ValidateHmacSignature
             return ApiResponse::failed(
                 GatewayErrorCode::AuthenticationFailed,
                 'Merchant API credentials are not available for signature validation.',
-                (string) $request->header('X-Request-Id'),
-                httpStatus: 401,
-            );
-        }
-
-        $bodyHash = $this->hmacSignatureService->hashRequestBody($request->getContent());
-        $providedHash = (string) $request->header('X-Content-SHA256', '');
-
-        if (! hash_equals($bodyHash, $providedHash)) {
-            return ApiResponse::failed(
-                GatewayErrorCode::SignatureFailed,
-                'Request body hash does not match X-Content-SHA256.',
-                (string) $request->header('X-Request-Id'),
+                (string) Str::uuid(),
                 httpStatus: 401,
             );
         }
@@ -62,7 +51,7 @@ class ValidateHmacSignature
             return ApiResponse::failed(
                 GatewayErrorCode::SignatureFailed,
                 'HMAC signature validation failed.',
-                (string) $request->header('X-Request-Id'),
+                (string) Str::uuid(),
                 httpStatus: 401,
             );
         }

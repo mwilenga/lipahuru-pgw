@@ -18,7 +18,6 @@ class PaymentFlowTest extends GatewayTestCase
     public function test_merchant_can_initiate_c2b_collection(): void
     {
         $credentials = $this->createActiveMerchantWithCredentials();
-        $this->plainClientSecret = $credentials['client_secret'];
         $token = $this->getAccessToken($credentials['client_id'], $credentials['client_secret']);
 
         $payload = [
@@ -34,31 +33,15 @@ class PaymentFlowTest extends GatewayTestCase
 
         $body = json_encode($payload);
         $hmac = app(\App\Services\Auth\HmacSignatureService::class);
-        $requestId = (string) Str::uuid();
-        $timestamp = now()->toIso8601String();
-        $nonce = Str::random(32);
-        $contentSha256 = base64_encode(hash('sha256', $body, true));
         $path = '/api/v1/payments/collections/push';
+        $contentSha256 = $hmac->hashRequestBody($body);
 
-        $canonical = $hmac->buildCanonicalString(
-            'POST',
-            $path,
-            $credentials['client_id'],
-            $requestId,
-            $timestamp,
-            $nonce,
-            $contentSha256,
-        );
+        $canonical = $hmac->buildCanonicalString('POST', $path, $contentSha256);
 
         $response = $this->postJson('/api/v1/payments/collections/push', $payload, [
             'Authorization' => 'Bearer '.$token,
-            'X-Client-Id' => $credentials['client_id'],
-            'X-Request-Id' => $requestId,
             'X-Idempotency-Key' => (string) Str::uuid(),
-            'X-Timestamp' => $timestamp,
-            'X-Nonce' => $nonce,
-            'X-Content-SHA256' => $contentSha256,
-            'X-Signature' => $hmac->sign($canonical, $credentials['signing_secret']),
+            'X-Signature' => $hmac->sign($canonical, $credentials['client_secret']),
         ]);
 
         $response->assertOk()
@@ -83,48 +66,27 @@ class PaymentFlowTest extends GatewayTestCase
 
         $body = json_encode($createPayload);
         $hmac = app(\App\Services\Auth\HmacSignatureService::class);
-        $requestId = (string) Str::uuid();
-        $timestamp = now()->toIso8601String();
-        $nonce = Str::random(32);
-        $contentSha256 = base64_encode(hash('sha256', $body, true));
         $path = '/api/v1/payments/collections/push';
+        $contentSha256 = $hmac->hashRequestBody($body);
 
-        $canonical = $hmac->buildCanonicalString(
-            'POST', $path, $credentials['client_id'], $requestId, $timestamp, $nonce, $contentSha256,
-        );
+        $canonical = $hmac->buildCanonicalString('POST', $path, $contentSha256);
 
         $createResponse = $this->postJson('/api/v1/payments/collections/push', $createPayload, [
             'Authorization' => 'Bearer '.$token,
-            'X-Client-Id' => $credentials['client_id'],
-            'X-Request-Id' => $requestId,
             'X-Idempotency-Key' => (string) Str::uuid(),
-            'X-Timestamp' => $timestamp,
-            'X-Nonce' => $nonce,
-            'X-Content-SHA256' => $contentSha256,
-            'X-Signature' => $hmac->sign($canonical, $credentials['signing_secret']),
+            'X-Signature' => $hmac->sign($canonical, $credentials['client_secret']),
         ]);
 
         $transactionId = $createResponse->json('data.transactionId');
 
         $getPath = '/api/v1/payments/'.$transactionId;
-        $getRequestId = (string) Str::uuid();
-        $getTimestamp = now()->toIso8601String();
-        $getNonce = Str::random(32);
-        $emptyBody = '';
-        $emptyHash = base64_encode(hash('sha256', $emptyBody, true));
+        $emptyHash = $hmac->hashRequestBody('');
 
-        $getCanonical = $hmac->buildCanonicalString(
-            'GET', $getPath, $credentials['client_id'], $getRequestId, $getTimestamp, $getNonce, $emptyHash,
-        );
+        $getCanonical = $hmac->buildCanonicalString('GET', $getPath, $emptyHash);
 
         $response = $this->call('GET', '/api/v1/payments/'.$transactionId, [], [], [], [
             'HTTP_Authorization' => 'Bearer '.$token,
-            'HTTP_X-Client-Id' => $credentials['client_id'],
-            'HTTP_X-Request-Id' => $getRequestId,
-            'HTTP_X-Timestamp' => $getTimestamp,
-            'HTTP_X-Nonce' => $getNonce,
-            'HTTP_X-Content-SHA256' => $emptyHash,
-            'HTTP_X-Signature' => $hmac->sign($getCanonical, $credentials['signing_secret']),
+            'HTTP_X-Signature' => $hmac->sign($getCanonical, $credentials['client_secret']),
             'HTTP_Accept' => 'application/json',
         ]);
 
