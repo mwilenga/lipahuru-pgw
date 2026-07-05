@@ -22,9 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->api(prepend: [
-            \Illuminate\Http\Middleware\HandleCors::class,
-        ]);
+        $middleware->prepend(\App\Http\Middleware\RespondToPreflight::class);
+        $middleware->trustProxies(at: '*');
 
         $middleware->alias([
             'gateway.headers' => \App\Http\Middleware\ValidateGatewayHeaders::class,
