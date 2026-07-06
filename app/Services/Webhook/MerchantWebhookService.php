@@ -4,17 +4,17 @@ namespace App\Services\Webhook;
 
 use App\Models\Transaction;
 use App\Models\WebhookDelivery;
-use Illuminate\Support\Facades\Bus;
+use App\Jobs\DeliverMerchantWebhookJob;
 
 class MerchantWebhookService
 {
-    public function dispatchPaymentFinalized(Transaction $transaction): WebhookDelivery
+    public function dispatchPaymentFinalized(Transaction $transaction): ?WebhookDelivery
     {
         $merchant = $transaction->merchant;
         $callbackUrl = $transaction->callback_url ?? $merchant->default_callback_url;
 
         if ($callbackUrl === null || $callbackUrl === '') {
-            throw new \InvalidArgumentException('No callback URL configured for transaction or merchant.');
+            return null;
         }
 
         $payload = $this->buildPaymentFinalizedPayload($transaction);
@@ -68,9 +68,7 @@ class MerchantWebhookService
 
     private function queueDelivery(WebhookDelivery $delivery): void
     {
-        Bus::dispatch(function () use ($delivery): void {
-            app(self::class)->attemptDelivery($delivery->id);
-        })->onQueue('webhooks');
+        DeliverMerchantWebhookJob::dispatch($delivery->id);
     }
 
     private function scheduleRetry(WebhookDelivery $delivery, ?int $httpStatus, ?string $responseBody): WebhookDelivery
@@ -101,9 +99,8 @@ class MerchantWebhookService
             'next_retry_at' => now()->addSeconds((int) $delaySeconds),
         ]);
 
-        Bus::dispatch(function () use ($delivery): void {
-            app(self::class)->attemptDelivery($delivery->id);
-        })->onQueue('webhooks')->delay(now()->addSeconds((int) $delaySeconds));
+        DeliverMerchantWebhookJob::dispatch($delivery->id)
+            ->delay(now()->addSeconds((int) $delaySeconds));
 
         return $delivery->refresh();
     }

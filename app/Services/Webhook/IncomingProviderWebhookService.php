@@ -3,6 +3,7 @@
 namespace App\Services\Webhook;
 
 use App\Models\IncomingWebhookLog;
+use App\Models\Transaction;
 use App\Providers\Payment\DTOs\ProviderWebhookEvent;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Services\Payment\PaymentService;
@@ -28,8 +29,10 @@ class IncomingProviderWebhookService
         ]);
 
         try {
-            DB::transaction(function () use ($event, $log): void {
-                $transaction = $this->transactionRepository->findByProviderReference($event->providerTransactionId);
+            $transaction = null;
+
+            DB::transaction(function () use ($event, $log, $request, &$transaction): void {
+                $transaction = $this->resolveTransaction($event, $request->all());
 
                 if ($transaction === null) {
                     $log->update(['status' => 'IGNORED', 'error_message' => 'Transaction not found']);
@@ -52,9 +55,12 @@ class IncomingProviderWebhookService
                     );
                 }
 
-                $this->merchantWebhookService->dispatchPaymentFinalized($transaction);
                 $log->update(['status' => 'PROCESSED', 'processed_at' => now()]);
             });
+
+            if ($transaction !== null && $log->status === 'PROCESSED') {
+                $this->merchantWebhookService->dispatchPaymentFinalized($transaction->fresh());
+            }
         } catch (\Throwable $exception) {
             $log->update([
                 'status' => 'FAILED',
@@ -63,5 +69,36 @@ class IncomingProviderWebhookService
 
             throw $exception;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function resolveTransaction(ProviderWebhookEvent $event, array $payload): ?Transaction
+    {
+        $transaction = $this->transactionRepository->findByProviderReference($event->providerTransactionId);
+
+        if ($transaction !== null) {
+            return $transaction;
+        }
+
+        $data = $payload['data'] ?? $payload;
+        $transactionId = (string) ($data['transactionId'] ?? '');
+
+        if ($transactionId !== '') {
+            $transaction = $this->transactionRepository->findByTransactionId($transactionId);
+
+            if ($transaction !== null) {
+                return $transaction;
+            }
+        }
+
+        $telcoReference = (string) ($data['providerTransactionId'] ?? '');
+
+        if ($telcoReference !== '') {
+            return $this->transactionRepository->findByProviderReference($telcoReference);
+        }
+
+        return null;
     }
 }

@@ -23,7 +23,7 @@ class PollProviderStatusJob implements ShouldQueue
     public function handle(ProviderRouter $providerRouter, PaymentService $paymentService): void
     {
         $query = Transaction::query()
-            ->where('status', TransactionStatus::PendingFinal)
+            ->whereIn('status', [TransactionStatus::Acknowledged, TransactionStatus::PendingFinal])
             ->where('updated_at', '<=', now()->subSeconds((int) config('payment-gateway.poll_pending_after_seconds', 120)));
 
         if ($this->transactionId !== null) {

@@ -243,6 +243,15 @@ class PaymentService
 
     public function finalizeSuccess(Transaction $transaction): Transaction
     {
+        if ($transaction->status === TransactionStatus::Acknowledged) {
+            $transaction = $this->stateMachine->transition(
+                $transaction,
+                TransactionStatus::PendingFinal,
+                'PENDING_FINAL',
+                actor: 'gateway',
+            );
+        }
+
         $transaction = $this->stateMachine->transition(
             $transaction,
             TransactionStatus::Success,

@@ -40,7 +40,7 @@ class GoDigitalProvider implements PaymentProviderInterface
             'currency' => $req->currency,
             'msisdn' => $req->msisdn,
             'reference' => $req->reference,
-            'callbackUrl' => $req->callbackUrl ?? config('providers.godigital.callback_url'),
+            'callbackUrl' => config('providers.godigital.callback_url'),
             'narration' => $req->narration,
         ];
 
@@ -63,7 +63,7 @@ class GoDigitalProvider implements PaymentProviderInterface
             'currency' => $req->currency,
             'msisdn' => $req->msisdn,
             'reference' => $req->reference,
-            'callbackUrl' => $req->callbackUrl ?? config('providers.godigital.callback_url'),
+            'callbackUrl' => config('providers.godigital.callback_url'),
             'narration' => $req->narration,
         ];
 
@@ -124,15 +124,17 @@ class GoDigitalProvider implements PaymentProviderInterface
         $payload = $request->all();
         $data = $payload['data'] ?? $payload;
 
-        $providerTransactionId = (string) ($data['providerTransactionId'] ?? $data['transactionId'] ?? '');
+        // GoDigital transactionId matches what we store as provider_transaction_id on initiation.
+        // providerTransactionId in their payload is the telco/MNO reference — not the lookup key.
+        $lookupId = (string) ($data['transactionId'] ?? $data['providerTransactionId'] ?? '');
         $status = $this->mapStatus((string) ($data['transactionStatus'] ?? $data['status'] ?? 'PENDING'));
 
         return new ProviderWebhookEvent(
-            providerTransactionId: $providerTransactionId,
+            providerTransactionId: $lookupId,
             status: $status,
             eventType: (string) ($payload['eventType'] ?? 'PAYMENT_FINALIZED'),
             payload: $payload,
-            providerReceiptNo: $data['providerReceiptNo'] ?? null,
+            providerReceiptNo: $data['providerReceiptNo'] ?? ($data['providerTransactionId'] ?? null),
             failureCode: $data['failureCode'] ?? null,
             failureMessage: $data['message'] ?? null,
         );
