@@ -6,6 +6,7 @@ use App\Enums\GatewayErrorCode;
 use App\Enums\MerchantStatus;
 use App\Exceptions\GatewayException;
 use App\Models\Merchant;
+use App\Models\MerchantProviderProfile;
 use App\Repositories\Contracts\MerchantRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
@@ -64,10 +65,16 @@ class MerchantService
             return $merchant;
         }
 
-        return $this->merchantRepository->update($merchant, [
+        $approved = $this->merchantRepository->update($merchant, [
             'status' => MerchantStatus::Active,
             'approved_at' => now(),
         ]);
+
+        MerchantProviderProfile::query()
+            ->where('merchant_id', $approved->id)
+            ->update(['is_enabled' => true]);
+
+        return $approved->refresh();
     }
 
     public function suspend(Merchant $merchant, ?string $reason = null): Merchant

@@ -5,6 +5,7 @@ namespace App\Services\Merchant;
 use App\Enums\MerchantStatus;
 use App\Enums\WalletType;
 use App\Models\Merchant;
+use App\Models\MerchantProviderProfile;
 use App\Models\ProviderNetwork;
 use App\Models\WalletBalance;
 use App\Repositories\Contracts\MerchantRepositoryInterface;
@@ -46,6 +47,7 @@ class MerchantOnboardingService
             ]);
 
             $this->provisionWalletHierarchy($merchant);
+            $this->provisionProviderProfiles($merchant);
 
             $clientId = 'cli_'.Str::lower(Str::random(24));
             $clientSecret = 'cs_'.Str::random(48);
@@ -101,6 +103,25 @@ class MerchantOnboardingService
                     'is_active' => true,
                 ]);
             }
+        }
+    }
+
+    private function provisionProviderProfiles(Merchant $merchant): void
+    {
+        $networks = ProviderNetwork::query()->where('is_active', true)->get();
+
+        foreach ($networks as $network) {
+            MerchantProviderProfile::query()->updateOrCreate(
+                [
+                    'merchant_id' => $merchant->id,
+                    'provider_network_id' => $network->id,
+                ],
+                [
+                    'is_enabled' => false,
+                    'min_amount' => 100,
+                    'max_amount' => 10000000,
+                ],
+            );
         }
     }
 
