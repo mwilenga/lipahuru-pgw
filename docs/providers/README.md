@@ -21,11 +21,25 @@ GODIGITAL_CALLBACK_URL="${APP_URL}/internal/webhooks/godigital"
 GODIGITAL_VERIFY_SSL=true
 ```
 
-Outbound calls to GoDigital use `GODIGITAL_CLIENT_SECRET` for HMAC signing. Inbound GoDigital callbacks are accepted without signature verification.
+Outbound calls to GoDigital use the **full HMAC header set** required by `api.godigital.tz`:
+
+- `Authorization`, `X-Client-Id`, `X-Request-Id`, `X-Timestamp`, `X-Nonce`, `X-Content-SHA256`, `X-Signature`
+- `X-Idempotency-Key` on payment creation
+
+Sign with `GODIGITAL_CLIENT_SECRET` (or `GODIGITAL_SIGNING_SECRET` if provided separately).
 
 Adapter: `app/Providers/Payment/GoDigital/GoDigitalProvider.php`
 
 HTTP samples: `http/api.http`
+
+## Merchant API vs upstream (GoDigital)
+
+| Direction | Who signs | Required headers |
+|-----------|-----------|------------------|
+| **Merchant → Lipahuru** | Merchant (`client_secret`) | `Authorization`, `X-Signature`, `X-Idempotency-Key` (payments only) |
+| **Lipahuru → GoDigital** | Lipahuru (`GODIGITAL_CLIENT_SECRET` in `.env`) | Full HMAC set: `X-Client-Id`, `X-Request-Id`, `X-Timestamp`, `X-Nonce`, `X-Content-SHA256`, `X-Signature`, etc. |
+
+Merchants never talk to GoDigital directly and never need GoDigital credentials. Lipahuru adds `merchantId`, upstream OAuth, timestamps, nonces, and all GoDigital-specific headers automatically in `GoDigitalHttpClient`.
 
 ## Additional providers
 

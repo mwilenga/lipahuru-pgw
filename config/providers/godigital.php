@@ -6,6 +6,7 @@ return [
     'oauth_path' => env('GODIGITAL_OAUTH_PATH', '/api/v1/oauth/token'),
     'client_id' => env('GODIGITAL_CLIENT_ID'),
     'client_secret' => env('GODIGITAL_CLIENT_SECRET'),
+    'signing_secret' => env('GODIGITAL_SIGNING_SECRET', env('GODIGITAL_CLIENT_SECRET')),
     'merchant_id' => env('GODIGITAL_MERCHANT_ID'),
     'timeout' => (int) env('GODIGITAL_TIMEOUT', 30),
     'verify_ssl' => filter_var(env('GODIGITAL_VERIFY_SSL', true), FILTER_VALIDATE_BOOLEAN),

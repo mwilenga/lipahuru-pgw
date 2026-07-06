@@ -74,8 +74,12 @@ class GoDigitalHttpClient
      */
     private function buildSignedHeaders(string $method, string $path, string $body, bool $idempotent): array
     {
-        $clientSecret = (string) config('providers.godigital.client_secret');
+        $signingSecret = (string) config('providers.godigital.signing_secret', config('providers.godigital.client_secret'));
+        $clientId = (string) config('providers.godigital.client_id');
         $contentSha256 = $this->hmac->hashRequestBody($body);
+        $requestId = (string) Str::uuid();
+        $timestamp = now()->toIso8601String();
+        $nonce = Str::random(32);
 
         $canonical = $this->hmac->buildCanonicalString(
             $method,
@@ -85,7 +89,12 @@ class GoDigitalHttpClient
 
         $headers = [
             'Authorization' => 'Bearer '.$this->token(),
-            'X-Signature' => $this->hmac->sign($canonical, $clientSecret),
+            'X-Client-Id' => $clientId,
+            'X-Request-Id' => $requestId,
+            'X-Timestamp' => $timestamp,
+            'X-Nonce' => $nonce,
+            'X-Content-SHA256' => $contentSha256,
+            'X-Signature' => $this->hmac->sign($canonical, $signingSecret),
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
         ];

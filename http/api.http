@@ -97,6 +97,11 @@ grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecre
 
 POST {{godigitalHost}}/api/v1/payments/collections/push
 Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Timestamp: 2026-07-06T09:00:00+00:00
+X-Nonce: replace-with-random-32-chars
+X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
 X-Idempotency-Key: {{idempotencyKey}}
 Content-Type: application/json
@@ -120,6 +125,11 @@ Accept: application/json
 
 POST {{godigitalHost}}/api/v1/payments/disbursements
 Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Timestamp: 2026-07-06T09:00:00+00:00
+X-Nonce: replace-with-random-32-chars
+X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
 X-Idempotency-Key: {{idempotencyKey}}
 Content-Type: application/json
@@ -143,6 +153,11 @@ Accept: application/json
 
 GET {{godigitalHost}}/api/v1/payments/{{transactionId}}
 Authorization: Bearer {{accessToken}}
+X-Client-Id: {{clientId}}
+X-Request-Id: {{requestId}}
+X-Timestamp: 2026-07-06T09:00:00+00:00
+X-Nonce: replace-with-random-32-chars
+X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
 Accept: application/json
 
