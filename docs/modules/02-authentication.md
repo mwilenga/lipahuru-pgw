@@ -22,7 +22,7 @@ No `X-Client-Id`, `X-Timestamp`, `X-Nonce`, or `X-Content-SHA256` on the merchan
 When Lipahuru forwards a payment to GoDigital, `GoDigitalHttpClient` adds everything GoDigital requires:
 
 - `Authorization` (GoDigital OAuth token from `.env` credentials)
-- `X-Client-Id`, `X-Request-Id`, `X-Timestamp`, `X-Nonce`, `X-Content-SHA256`, `X-Signature`
+- `X-Client-Id`, `X-Request-Id`, `X-Timestamp` (Unix epoch seconds), `X-Nonce`, `X-Content-SHA256`, `X-Signature`
 - `X-Idempotency-Key` on payment POSTs
 - `merchantId` in the JSON body (from `GODIGITAL_MERCHANT_ID`)
 

@@ -99,7 +99,7 @@ POST {{godigitalHost}}/api/v1/payments/collections/push
 Authorization: Bearer {{accessToken}}
 X-Client-Id: {{clientId}}
 X-Request-Id: {{requestId}}
-X-Timestamp: 2026-07-06T09:00:00+00:00
+X-Timestamp: 1783318800
 X-Nonce: replace-with-random-32-chars
 X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
@@ -127,7 +127,7 @@ POST {{godigitalHost}}/api/v1/payments/disbursements
 Authorization: Bearer {{accessToken}}
 X-Client-Id: {{clientId}}
 X-Request-Id: {{requestId}}
-X-Timestamp: 2026-07-06T09:00:00+00:00
+X-Timestamp: 1783318800
 X-Nonce: replace-with-random-32-chars
 X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}
@@ -155,7 +155,7 @@ GET {{godigitalHost}}/api/v1/payments/{{transactionId}}
 Authorization: Bearer {{accessToken}}
 X-Client-Id: {{clientId}}
 X-Request-Id: {{requestId}}
-X-Timestamp: 2026-07-06T09:00:00+00:00
+X-Timestamp: 1783318800
 X-Nonce: replace-with-random-32-chars
 X-Content-SHA256: {{contentSha256}}
 X-Signature: {{signature}}

@@ -23,7 +23,7 @@ GODIGITAL_VERIFY_SSL=true
 
 Outbound calls to GoDigital use the **full HMAC header set** required by `api.godigital.tz`:
 
-- `Authorization`, `X-Client-Id`, `X-Request-Id`, `X-Timestamp`, `X-Nonce`, `X-Content-SHA256`, `X-Signature`
+- `Authorization`, `X-Client-Id`, `X-Request-Id`, `X-Timestamp` (Unix epoch seconds), `X-Nonce`, `X-Content-SHA256`, `X-Signature`
 - `X-Idempotency-Key` on payment creation
 
 Sign with `GODIGITAL_CLIENT_SECRET` (or `GODIGITAL_SIGNING_SECRET` if provided separately).

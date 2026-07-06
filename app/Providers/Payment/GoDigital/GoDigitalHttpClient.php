@@ -78,7 +78,7 @@ class GoDigitalHttpClient
         $clientId = (string) config('providers.godigital.client_id');
         $contentSha256 = $this->hmac->hashRequestBody($body);
         $requestId = (string) Str::uuid();
-        $timestamp = now()->toIso8601String();
+        $timestamp = (string) now()->getTimestamp();
         $nonce = Str::random(32);
 
         $canonical = $this->hmac->buildCanonicalString(
