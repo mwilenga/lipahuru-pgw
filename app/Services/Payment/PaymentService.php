@@ -243,21 +243,23 @@ class PaymentService
 
     public function finalizeSuccess(Transaction $transaction): Transaction
     {
-        if ($transaction->status === TransactionStatus::Acknowledged) {
+        if ($transaction->status !== TransactionStatus::Success) {
+            if ($transaction->status === TransactionStatus::Acknowledged) {
+                $transaction = $this->stateMachine->transition(
+                    $transaction,
+                    TransactionStatus::PendingFinal,
+                    'PENDING_FINAL',
+                    actor: 'gateway',
+                );
+            }
+
             $transaction = $this->stateMachine->transition(
                 $transaction,
-                TransactionStatus::PendingFinal,
-                'PENDING_FINAL',
+                TransactionStatus::Success,
+                'PAYMENT_SUCCEEDED',
                 actor: 'gateway',
             );
         }
-
-        $transaction = $this->stateMachine->transition(
-            $transaction,
-            TransactionStatus::Success,
-            'PAYMENT_SUCCEEDED',
-            actor: 'gateway',
-        );
 
         if ($transaction->operation === PaymentOperation::B2cDisbursement) {
             $this->walletLedgerService->consumeFunds($transaction);
@@ -270,7 +272,7 @@ class PaymentService
                 $transaction->provider_network_id,
             );
 
-            if ($collectionWallet !== null) {
+            if ($collectionWallet !== null && ! $this->walletLedgerService->hasCollectionCredit($transaction)) {
                 $this->walletLedgerService->creditCollectionWallet(
                     $collectionWallet,
                     $transaction,

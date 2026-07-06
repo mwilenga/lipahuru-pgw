@@ -206,6 +206,57 @@ class WalletLedgerService
         });
     }
 
+    public function hasCollectionCredit(Transaction $transaction): bool
+    {
+        return LedgerEntry::query()
+            ->where('transaction_id', $transaction->id)
+            ->where('entry_type', 'CREDIT')
+            ->exists();
+    }
+
+    public function syncParentWalletBalances(?int $merchantId = null): int
+    {
+        $query = Wallet::query()
+            ->where('wallet_type', \App\Enums\WalletType::MerchantParent)
+            ->with(['balance', 'childWallets.balance']);
+
+        if ($merchantId !== null) {
+            $query->where('merchant_id', $merchantId);
+        }
+
+        $updated = 0;
+
+        foreach ($query->get() as $parentWallet) {
+            if ($parentWallet->balance === null) {
+                continue;
+            }
+
+            $available = '0.0000';
+            $reserved = '0.0000';
+            $total = '0.0000';
+
+            foreach ($parentWallet->childWallets as $childWallet) {
+                if ($childWallet->balance === null) {
+                    continue;
+                }
+
+                $available = bcadd($available, (string) $childWallet->balance->available, 4);
+                $reserved = bcadd($reserved, (string) $childWallet->balance->reserved, 4);
+                $total = bcadd($total, (string) $childWallet->balance->total, 4);
+            }
+
+            $parentWallet->balance->update([
+                'available' => $available,
+                'reserved' => $reserved,
+                'total' => $total,
+            ]);
+
+            $updated++;
+        }
+
+        return $updated;
+    }
+
     private function postMirrorEntry(int $walletId, Transaction $transaction, string $amount, string $description): void
     {
         $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($walletId);
@@ -234,5 +285,14 @@ class WalletLedgerService
             'description' => $description,
             'created_at' => now(),
         ]);
+
+        if ($lockedWallet->parent_wallet_id !== null) {
+            $this->postMirrorEntry(
+                walletId: $lockedWallet->parent_wallet_id,
+                transaction: $transaction,
+                amount: $amount,
+                description: 'Collection mirror credit on parent wallet',
+            );
+        }
     }
 }
