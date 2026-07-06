@@ -7,7 +7,13 @@ Lipahuru routes all mobile money networks (YAS, VODACOM, HALOTEL, AIRTEL) to **G
 Configure in `.env`:
 
 ```
-GODIGITAL_BASE_URL=https://your-godigital-uat-host
+GODIGITAL_BASE_URL=https://your-godigital-host.com
+GODIGITAL_OAUTH_PATH=/api/v1/oauth/token
+```
+
+GoDigital (e.g. `api.godigital.tz`) uses **`/api/v1/oauth/token`** for tokens and **`/api/v1/payments/...`** for payments. Set `GODIGITAL_BASE_URL` to the host root only (`https://api.godigital.tz`), not `.../api/v1`.
+
+```
 GODIGITAL_CLIENT_ID=
 GODIGITAL_CLIENT_SECRET=
 GODIGITAL_MERCHANT_ID=

@@ -3,6 +3,7 @@
 return [
     'driver' => 'godigital',
     'base_url' => env('GODIGITAL_BASE_URL', 'https://uat.godigital.example.com'),
+    'oauth_path' => env('GODIGITAL_OAUTH_PATH', '/api/v1/oauth/token'),
     'client_id' => env('GODIGITAL_CLIENT_ID'),
     'client_secret' => env('GODIGITAL_CLIENT_SECRET'),
     'merchant_id' => env('GODIGITAL_MERCHANT_ID'),

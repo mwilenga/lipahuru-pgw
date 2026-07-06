@@ -103,18 +103,24 @@ class GoDigitalHttpClient
             return $this->accessToken;
         }
 
+        $oauthPath = (string) config('providers.godigital.oauth_path', '/api/v1/oauth/token');
+
         $response = $this->baseRequest()
             ->asForm()
-            ->post('/oauth/token', [
+            ->post($oauthPath, [
                 'grant_type' => 'client_credentials',
                 'client_id' => config('providers.godigital.client_id'),
                 'client_secret' => config('providers.godigital.client_secret'),
             ]);
 
         if ($response->failed()) {
+            $detail = trim($response->body()) !== ''
+                ? $response->body()
+                : 'HTTP '.$response->status().' (empty body)';
+
             throw new GatewayException(
                 GatewayErrorCode::GeneralError,
-                'Failed to authenticate with GoDigital: '.$response->body(),
+                'Failed to authenticate with GoDigital: '.$detail,
                 502,
             );
         }
@@ -139,7 +145,7 @@ class GoDigitalHttpClient
 
     private function baseRequest(): PendingRequest
     {
-        $request = Http::baseUrl(rtrim((string) config('providers.godigital.base_url'), '/'))
+        $request = Http::baseUrl($this->normalizedBaseUrl())
             ->timeout((int) config('providers.godigital.timeout', 30));
 
         if (! config('providers.godigital.verify_ssl', true)) {
@@ -147,5 +153,16 @@ class GoDigitalHttpClient
         }
 
         return $request;
+    }
+
+    private function normalizedBaseUrl(): string
+    {
+        $base = rtrim((string) config('providers.godigital.base_url'), '/');
+
+        if (str_ends_with($base, '/api/v1')) {
+            $base = substr($base, 0, -strlen('/api/v1'));
+        }
+
+        return rtrim($base, '/');
     }
 }
