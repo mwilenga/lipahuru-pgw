@@ -30,9 +30,11 @@ class IncomingProviderWebhookService
 
         try {
             $transaction = null;
+            $payload = $request->all();
+            $data = $payload['data'] ?? $payload;
 
-            DB::transaction(function () use ($event, $log, $request, &$transaction): void {
-                $transaction = $this->resolveTransaction($event, $request->all());
+            DB::transaction(function () use ($event, $log, $data, &$transaction): void {
+                $transaction = $this->resolveTransaction($data);
 
                 if ($transaction === null) {
                     $log->update(['status' => 'IGNORED', 'error_message' => 'Transaction not found']);
@@ -40,10 +42,17 @@ class IncomingProviderWebhookService
                     return;
                 }
 
-                $transaction->update([
-                    'provider_transaction_id' => $event->providerTransactionId,
+                $updates = [
                     'provider_receipt_no' => $event->providerReceiptNo ?? $transaction->provider_receipt_no,
-                ]);
+                ];
+
+                $upstreamId = $this->resolveUpstreamTransactionId($data);
+
+                if ($upstreamId !== '') {
+                    $updates['provider_transaction_id'] = $upstreamId;
+                }
+
+                $transaction->update($updates);
 
                 if ($event->status->value === 'SUCCESS') {
                     $transaction = $this->paymentService->finalizeSuccess($transaction->fresh());
@@ -58,7 +67,7 @@ class IncomingProviderWebhookService
                 $log->update(['status' => 'PROCESSED', 'processed_at' => now()]);
             });
 
-            if ($transaction !== null && $log->status === 'PROCESSED') {
+            if ($transaction !== null && $log->fresh()->status === 'PROCESSED') {
                 $this->merchantWebhookService->dispatchPaymentFinalized($transaction->fresh());
             }
         } catch (\Throwable $exception) {
@@ -72,33 +81,83 @@ class IncomingProviderWebhookService
     }
 
     /**
-     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $data
      */
-    private function resolveTransaction(ProviderWebhookEvent $event, array $payload): ?Transaction
+    private function resolveTransaction(array $data): ?Transaction
     {
-        $transaction = $this->transactionRepository->findByProviderReference($event->providerTransactionId);
-
-        if ($transaction !== null) {
-            return $transaction;
-        }
-
-        $data = $payload['data'] ?? $payload;
-        $transactionId = (string) ($data['transactionId'] ?? '');
-
-        if ($transactionId !== '') {
-            $transaction = $this->transactionRepository->findByTransactionId($transactionId);
+        foreach ($this->candidateIdentifiers($data) as $candidate) {
+            $transaction = $this->findByIdentifier($candidate);
 
             if ($transaction !== null) {
                 return $transaction;
             }
         }
 
-        $telcoReference = (string) ($data['providerTransactionId'] ?? '');
+        return null;
+    }
 
-        if ($telcoReference !== '') {
-            return $this->transactionRepository->findByProviderReference($telcoReference);
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<string>
+     */
+    private function candidateIdentifiers(array $data): array
+    {
+        $candidates = [
+            (string) ($data['providerTransactionId'] ?? ''),
+            (string) ($data['transactionId'] ?? ''),
+            (string) ($data['reference'] ?? ''),
+            (string) ($data['requestId'] ?? ''),
+        ];
+
+        return array_values(array_unique(array_filter($candidates, static fn (string $value): bool => $value !== '')));
+    }
+
+    private function findByIdentifier(string $identifier): ?Transaction
+    {
+        if (str_starts_with($identifier, 'TXN-')) {
+            $transaction = $this->transactionRepository->findByTransactionId($identifier);
+
+            if ($transaction !== null) {
+                return $transaction;
+            }
         }
 
-        return null;
+        $transaction = $this->transactionRepository->findByProviderReference($identifier);
+
+        if ($transaction !== null) {
+            return $transaction;
+        }
+
+        $transaction = $this->transactionRepository->findByReference($identifier);
+
+        if ($transaction !== null) {
+            return $transaction;
+        }
+
+        return $this->transactionRepository->findByRequestId($identifier);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveUpstreamTransactionId(array $data): string
+    {
+        $providerTransactionId = (string) ($data['providerTransactionId'] ?? '');
+        $transactionId = (string) ($data['transactionId'] ?? '');
+
+        if ($this->looksLikeUpstreamTransactionId($providerTransactionId)) {
+            return $providerTransactionId;
+        }
+
+        if ($this->looksLikeUpstreamTransactionId($transactionId)) {
+            return $transactionId;
+        }
+
+        return $providerTransactionId !== '' ? $providerTransactionId : $transactionId;
+    }
+
+    private function looksLikeUpstreamTransactionId(string $value): bool
+    {
+        return str_starts_with($value, 'GD') || preg_match('/^\d{6,}$/', $value) === 1;
     }
 }

@@ -43,6 +43,22 @@ class EloquentTransactionRepository implements TransactionRepositoryInterface
             ->first();
     }
 
+    public function findByReference(string $reference): ?Transaction
+    {
+        return Transaction::query()
+            ->where('reference', $reference)
+            ->latest('id')
+            ->first();
+    }
+
+    public function findByRequestId(string $requestId): ?Transaction
+    {
+        return Transaction::query()
+            ->where('request_id', $requestId)
+            ->latest('id')
+            ->first();
+    }
+
     public function create(array $attributes): Transaction
     {
         return Transaction::query()->create($attributes);

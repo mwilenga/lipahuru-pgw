@@ -124,17 +124,14 @@ class GoDigitalProvider implements PaymentProviderInterface
         $payload = $request->all();
         $data = $payload['data'] ?? $payload;
 
-        // GoDigital transactionId matches what we store as provider_transaction_id on initiation.
-        // providerTransactionId in their payload is the telco/MNO reference — not the lookup key.
-        $lookupId = (string) ($data['transactionId'] ?? $data['providerTransactionId'] ?? '');
         $status = $this->mapStatus((string) ($data['transactionStatus'] ?? $data['status'] ?? 'PENDING'));
 
         return new ProviderWebhookEvent(
-            providerTransactionId: $lookupId,
+            providerTransactionId: (string) ($data['providerTransactionId'] ?? $data['transactionId'] ?? ''),
             status: $status,
             eventType: (string) ($payload['eventType'] ?? 'PAYMENT_FINALIZED'),
             payload: $payload,
-            providerReceiptNo: $data['providerReceiptNo'] ?? ($data['providerTransactionId'] ?? null),
+            providerReceiptNo: $data['providerReceiptNo'] ?? null,
             failureCode: $data['failureCode'] ?? null,
             failureMessage: $data['message'] ?? null,
         );

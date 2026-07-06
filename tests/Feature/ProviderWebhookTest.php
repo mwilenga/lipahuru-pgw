@@ -91,4 +91,45 @@ class ProviderWebhookTest extends GatewayTestCase
         $response->assertOk();
         $this->assertSame(TransactionStatus::Success, $transaction->fresh()->status);
     }
+
+    public function test_godigital_webhook_matches_reference_when_transaction_id_field_is_merchant_reference(): void
+    {
+        $credentials = $this->createActiveMerchantWithCredentials();
+        $merchant = $credentials['merchant'];
+
+        $transaction = Transaction::query()->create([
+            'transaction_id' => 'TXN-TESTWEBHOOK0003',
+            'merchant_id' => $merchant->id,
+            'provider_network_id' => $merchant->providerProfiles()->first()->provider_network_id,
+            'request_id' => 'req-webhook-003',
+            'reference' => 'INV-CURL-1783321093',
+            'operation' => PaymentOperation::C2bPush,
+            'status' => TransactionStatus::Acknowledged,
+            'amount' => 100,
+            'currency' => 'TZS',
+            'msisdn' => '255768102956',
+            'provider_transaction_id' => 'GD26070606570673204',
+        ]);
+
+        $response = $this->postJson('/internal/webhooks/godigital', [
+            'eventType' => 'PAYMENT_FINALIZED',
+            'data' => [
+                'transactionId' => 'INV-CURL-1783321093',
+                'providerTransactionId' => 'GD26070606570673204',
+                'transactionStatus' => 'SUCCESS',
+                'providerReceiptNo' => 'DG62J1OUJP',
+            ],
+        ]);
+
+        $response->assertOk()->assertJson(['status' => 'RECEIVED']);
+
+        $transaction->refresh();
+
+        $this->assertSame(TransactionStatus::Success, $transaction->status);
+        $this->assertSame('GD26070606570673204', $transaction->provider_transaction_id);
+        $this->assertSame('DG62J1OUJP', $transaction->provider_receipt_no);
+
+        $log = IncomingWebhookLog::query()->latest('id')->first();
+        $this->assertSame('PROCESSED', $log->status);
+    }
 }

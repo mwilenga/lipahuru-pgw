@@ -8,7 +8,7 @@
 ### Copy the printed headers into the requests below.
 
 @lipahuruHost = http://localhost:8000
-@godigitalHost = https://uat.godigital.example.com
+@godigitalHost = https://api.godigital.tz
 
 @clientId = cli_your_client_id
 @clientSecret = cs_your_client_secret
@@ -16,7 +16,11 @@
 @requestId = 3cf73c52-d6b0-4906-8b5d-f9a4f82b5011
 @idempotencyKey = 7a1b2c3d-e4f5-6789-abcd-ef0123456789
 @signature = paste_hmac_signature_here
+@contentSha256 = paste_base64_sha256_of_request_body
 @transactionId = TXN-20260419-000022
+@godigitalTransactionId = GD26070606570673204
+@merchantReference = INV-1001
+@providerReceiptNo = DG62J1OUJP
 
 ###############################################################################
 # 1. LIPAHURU — OAuth token (merchant)
@@ -45,7 +49,7 @@ Accept: application/json
   "amount": 10000.00,
   "currency": "TZS",
   "msisdn": "255754123456",
-  "reference": "INV-1001",
+  "reference": "{{merchantReference}}",
   "callbackUrl": "https://merchant.example.com/api/payment-result",
   "narration": "Invoice INV-1001"
 }
@@ -93,6 +97,7 @@ grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecre
 
 ###############################################################################
 # 6. GODIGITAL UPSTREAM — C2B push (Lipahuru → GoDigital)
+# Lipahuru sets callbackUrl to GODIGITAL_CALLBACK_URL automatically.
 ###############################################################################
 
 POST {{godigitalHost}}/api/v1/payments/collections/push
@@ -108,14 +113,14 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "requestId": "3cf73c52-d6b0-4906-8b5d-f9a4f82b5011",
+  "requestId": "{{requestId}}",
   "merchantId": "your-godigital-merchant-id",
   "providerCode": "VODACOM",
   "amount": 10000.00,
   "currency": "TZS",
   "msisdn": "255754123456",
-  "reference": "INV-1001",
-  "callbackUrl": "http://localhost:8000/internal/webhooks/godigital",
+  "reference": "{{merchantReference}}",
+  "callbackUrl": "https://lipahuru-api.gotiketi.co.tz/internal/webhooks/godigital",
   "narration": "Invoice INV-1001"
 }
 
@@ -143,7 +148,7 @@ Accept: application/json
   "currency": "TZS",
   "msisdn": "255713123456",
   "reference": "PAYOUT-1001",
-  "callbackUrl": "http://localhost:8000/internal/webhooks/godigital",
+  "callbackUrl": "https://lipahuru-api.gotiketi.co.tz/internal/webhooks/godigital",
   "narration": "Customer refund"
 }
 
@@ -151,7 +156,7 @@ Accept: application/json
 # 8. GODIGITAL UPSTREAM — Query transaction status
 ###############################################################################
 
-GET {{godigitalHost}}/api/v1/payments/{{transactionId}}
+GET {{godigitalHost}}/api/v1/payments/{{godigitalTransactionId}}
 Authorization: Bearer {{accessToken}}
 X-Client-Id: {{clientId}}
 X-Request-Id: {{requestId}}
@@ -163,6 +168,14 @@ Accept: application/json
 
 ###############################################################################
 # 9. GODIGITAL → LIPAHURU webhook (payment finalized callback)
+#
+# Field guide (GoDigital callback):
+#   transactionId         = GoDigital payment id (GD...)
+#   providerTransactionId = telco/MNO reference (numeric)
+#   reference             = merchant invoice/reference (INV-...)
+#
+# Replay tip: use godigitalTransactionId from transactions.provider_transaction_id,
+# or reference from transactions.reference — NOT the merchant reference in transactionId.
 ###############################################################################
 
 POST {{lipahuruHost}}/internal/webhooks/godigital
@@ -170,19 +183,19 @@ Content-Type: application/json
 
 {
   "eventType": "PAYMENT_FINALIZED",
-  "timestamp": "2026-04-19T21:38:57+03:00",
+  "timestamp": "2026-07-06T12:00:00+03:00",
   "data": {
-    "transactionId": "TXN-20260419-000022",
-    "requestId": "3cf73c52-d6b0-4906-8b5d-f9a4f82b5011",
+    "transactionId": "{{godigitalTransactionId}}",
+    "requestId": "{{requestId}}",
     "providerCode": "VODACOM",
     "operation": "C2B_USSD_PUSH",
     "transactionStatus": "SUCCESS",
-    "amount": 10000.00,
+    "amount": 100.00,
     "currency": "TZS",
-    "msisdn": "255754123456",
-    "reference": "INV-1001",
+    "msisdn": "255768102956",
+    "reference": "{{merchantReference}}",
     "providerTransactionId": "919994765",
-    "providerReceiptNo": "5HN31LXJQAX",
+    "providerReceiptNo": "{{providerReceiptNo}}",
     "message": "Transaction finalized successfully"
   }
 }

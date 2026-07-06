@@ -17,6 +17,10 @@ interface TransactionRepositoryInterface
 
     public function findByProviderReference(string $providerTransactionId): ?Transaction;
 
+    public function findByReference(string $reference): ?Transaction;
+
+    public function findByRequestId(string $requestId): ?Transaction;
+
     public function create(array $attributes): Transaction;
 
     public function updateStatus(Transaction $transaction, TransactionStatus $status): Transaction;
