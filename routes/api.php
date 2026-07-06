@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\V1\AdminAuthController;
 use App\Http\Controllers\Admin\V1\AdminMerchantController;
 use App\Http\Controllers\Admin\V1\AdminMonitoringController;
+use App\Http\Controllers\Admin\V1\AdminPortalController;
 use App\Http\Controllers\Admin\V1\AdminProviderController;
 use App\Http\Controllers\Admin\V1\AdminReportController;
 use App\Http\Controllers\Admin\V1\AdminSettlementController;
@@ -63,6 +64,7 @@ Route::prefix('admin/v1')
     ->middleware(['auth:admin'])
     ->group(function (): void {
         Route::get('/health', [AdminMonitoringController::class, 'health']);
+        Route::get('/dashboard', [AdminPortalController::class, 'dashboard']);
 
         Route::apiResource('merchants', AdminMerchantController::class);
         Route::post('/merchants/{merchant}/approve', [AdminMerchantController::class, 'approve']);

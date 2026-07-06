@@ -30,6 +30,7 @@ class TransactionResource extends JsonResource
             'providerReceiptNo' => $this->provider_receipt_no,
             'failureCode' => $this->failure_code,
             'failureMessage' => $this->failure_message,
+            'merchantName' => $this->merchant?->name,
             'finalizedAt' => $this->finalized_at?->toIso8601String(),
             'createdAt' => $this->created_at?->toIso8601String(),
             'updatedAt' => $this->updated_at?->toIso8601String(),
