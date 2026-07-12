@@ -9,6 +9,7 @@ use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Services\Payment\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class IncomingProviderWebhookService
 {
@@ -33,11 +34,22 @@ class IncomingProviderWebhookService
             $payload = $request->all();
             $data = $payload['data'] ?? $payload;
 
-            DB::transaction(function () use ($event, $log, $data, &$transaction): void {
+            DB::transaction(function () use ($event, $log, $data, $providerCode, &$transaction): void {
                 $transaction = $this->resolveTransaction($data);
 
                 if ($transaction === null) {
                     $log->update(['status' => 'IGNORED', 'error_message' => 'Transaction not found']);
+
+                    Log::warning('GoDigital inbound webhook ignored', [
+                        'provider' => strtoupper($providerCode),
+                        'incomingWebhookLogId' => $log->id,
+                        'eventType' => $event->eventType,
+                        'mappedStatus' => $event->status->value,
+                        'transactionId' => $data['transactionId'] ?? null,
+                        'providerTransactionId' => $data['providerTransactionId'] ?? null,
+                        'reference' => $data['reference'] ?? null,
+                        'reason' => 'Transaction not found',
+                    ]);
 
                     return;
                 }
@@ -69,11 +81,30 @@ class IncomingProviderWebhookService
 
             if ($transaction !== null && $log->fresh()->status === 'PROCESSED') {
                 $this->merchantWebhookService->dispatchPaymentFinalized($transaction->fresh());
+
+                Log::info('GoDigital inbound webhook processed', [
+                    'provider' => strtoupper($providerCode),
+                    'incomingWebhookLogId' => $log->id,
+                    'lipahuruTransactionId' => $transaction->transaction_id,
+                    'reference' => $transaction->reference,
+                    'finalStatus' => $transaction->fresh()->status->value,
+                    'merchantCallbackUrl' => $transaction->callback_url,
+                    'merchantWebhookDispatched' => true,
+                ]);
             }
         } catch (\Throwable $exception) {
             $log->update([
                 'status' => 'FAILED',
                 'error_message' => $exception->getMessage(),
+            ]);
+
+            Log::error('GoDigital inbound webhook failed', [
+                'provider' => strtoupper($providerCode),
+                'incomingWebhookLogId' => $log->id,
+                'eventType' => $event->eventType,
+                'mappedStatus' => $event->status->value,
+                'error' => $exception->getMessage(),
+                'payload' => $request->all(),
             ]);
 
             throw $exception;
