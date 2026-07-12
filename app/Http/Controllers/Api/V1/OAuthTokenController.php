@@ -15,6 +15,7 @@ class OAuthTokenController extends Controller
 
     public function issue(OAuthTokenRequest $request): JsonResponse
     {
+        info($request->all());
         $token = $this->oauthTokenService->issueClientCredentialsToken(
             $request->validated('client_id'),
             $request->validated('client_secret'),
