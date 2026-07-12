@@ -8,6 +8,7 @@ use App\Services\Auth\HmacSignatureService;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class GoDigitalHttpClient
@@ -59,14 +60,56 @@ class GoDigitalHttpClient
     private function send(string $method, string $path, string $body, bool $idempotent): Response
     {
         $headers = $this->buildSignedHeaders($method, $path, $body, $idempotent);
+        $url = $this->normalizedBaseUrl().$path;
+        /** @var array<string, mixed>|null $payload */
+        $payload = $body !== '' ? json_decode($body, true) : null;
+
+        Log::info('GoDigital outbound request', [
+            'method' => $method,
+            'url' => $url,
+            'path' => $path,
+            'payload' => $payload,
+            'callbackUrl' => is_array($payload) ? ($payload['callbackUrl'] ?? null) : null,
+            'configuredCallbackUrl' => config('providers.godigital.callback_url'),
+            'headers' => $this->redactHeadersForLog($headers),
+        ]);
 
         $request = $this->client()->withHeaders($headers);
 
         if ($method === 'GET') {
-            return $request->get($path);
+            $response = $request->get($path);
+        } else {
+            $response = $request->withBody($body, 'application/json')->post($path);
         }
 
-        return $request->withBody($body, 'application/json')->post($path);
+        Log::info('GoDigital outbound response', [
+            'method' => $method,
+            'url' => $url,
+            'path' => $path,
+            'httpStatus' => $response->status(),
+            'body' => $response->json() ?? $response->body(),
+        ]);
+
+        return $response;
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     * @return array<string, string>
+     */
+    private function redactHeadersForLog(array $headers): array
+    {
+        $safe = $headers;
+
+        if (isset($safe['Authorization'])) {
+            $safe['Authorization'] = 'Bearer [REDACTED]';
+        }
+
+        if (isset($safe['X-Signature'])) {
+            $safe['X-Signature'] = '[REDACTED]';
+        }
+
+        return $safe;
     }
 
     /**
@@ -113,6 +156,14 @@ class GoDigitalHttpClient
         }
 
         $oauthPath = (string) config('providers.godigital.oauth_path', '/api/v1/oauth/token');
+        $oauthUrl = $this->normalizedBaseUrl().$oauthPath;
+
+        Log::info('GoDigital OAuth token request', [
+            'method' => 'POST',
+            'url' => $oauthUrl,
+            'path' => $oauthPath,
+            'clientId' => config('providers.godigital.client_id'),
+        ]);
 
         $response = $this->baseRequest()
             ->asForm()
