@@ -13,6 +13,7 @@ use App\Providers\Payment\DTOs\ProviderStatusResponse;
 use App\Providers\Payment\DTOs\ProviderWebhookEvent;
 use App\Providers\Payment\DTOs\RefundRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class GoDigitalProvider implements PaymentProviderInterface
@@ -85,9 +86,18 @@ class GoDigitalProvider implements PaymentProviderInterface
         $response = $this->client->get('/api/v1/payments/'.$providerRef);
 
         if ($response->failed()) {
+            Log::error('GoDigital status query failed', [
+                'providerRef' => $providerRef,
+                'httpStatus' => $response->status(),
+                'detail' => GoDigitalUserMessage::summarizeUpstreamDetail($response->body(), $response->status()),
+            ]);
+
             throw new GatewayException(
                 GatewayErrorCode::GeneralError,
-                'GoDigital status query failed: '.$response->body(),
+                GoDigitalUserMessage::forFailedResponse(
+                    $response->body(),
+                    GoDigitalUserMessage::statusQueryFailed(),
+                ),
                 502,
             );
         }
@@ -115,7 +125,7 @@ class GoDigitalProvider implements PaymentProviderInterface
 
         throw new GatewayException(
             GatewayErrorCode::GeneralError,
-            'GoDigital refunds are not defined in the upstream API specification.',
+            GoDigitalUserMessage::refundsNotSupported(),
         );
     }
 
@@ -145,8 +155,8 @@ class GoDigitalProvider implements PaymentProviderInterface
             return new ProviderResponse(
                 success: false,
                 status: TransactionStatus::Failed,
-                failureCode: (string) ($envelope['code'] ?? 'GODIGITAL_ERROR'),
-                failureMessage: (string) ($envelope['message'] ?? 'GoDigital request failed'),
+                failureCode: (string) ($envelope['code'] ?? 'PROVIDER_ERROR'),
+                failureMessage: (string) ($envelope['message'] ?? GoDigitalUserMessage::requestFailed()),
                 rawResponse: $envelope,
             );
         }

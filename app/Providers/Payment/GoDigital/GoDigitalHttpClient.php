@@ -34,7 +34,7 @@ class GoDigitalHttpClient
         if ($merchantId === '' && ! $this->isMockMode()) {
             throw new GatewayException(
                 GatewayErrorCode::GeneralError,
-                'GoDigital merchant ID is not configured. Set GODIGITAL_MERCHANT_ID in .env.',
+                GoDigitalUserMessage::notConfigured(),
                 500,
             );
         }
@@ -178,9 +178,18 @@ class GoDigitalHttpClient
                 ? $response->body()
                 : 'HTTP '.$response->status().' (empty body)';
 
+            Log::error('GoDigital OAuth token request failed', [
+                'url' => $oauthUrl,
+                'httpStatus' => $response->status(),
+                'detail' => GoDigitalUserMessage::summarizeUpstreamDetail($detail, $response->status()),
+            ]);
+
             throw new GatewayException(
                 GatewayErrorCode::GeneralError,
-                'Failed to authenticate with GoDigital: '.$detail,
+                GoDigitalUserMessage::forFailedResponse(
+                    $detail,
+                    GoDigitalUserMessage::authenticationFailed(),
+                ),
                 502,
             );
         }
@@ -188,9 +197,14 @@ class GoDigitalHttpClient
         $this->accessToken = (string) $response->json('access_token', '');
 
         if ($this->accessToken === '') {
+            Log::error('GoDigital OAuth token request returned empty access token', [
+                'url' => $oauthUrl,
+                'httpStatus' => $response->status(),
+            ]);
+
             throw new GatewayException(
                 GatewayErrorCode::GeneralError,
-                'GoDigital returned an empty access token.',
+                GoDigitalUserMessage::emptyAccessToken(),
                 502,
             );
         }
