@@ -25,6 +25,8 @@ class AdminTransactionIndexRequest extends GatewayFormRequest
             'operation' => ['sometimes', 'nullable', 'string', Rule::in(array_column(PaymentOperation::cases(), 'value'))],
             'providerCode' => ['sometimes', 'nullable', 'string', 'max:32'],
             'reference' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'msisdn' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'providerReceiptNo' => ['sometimes', 'nullable', 'string', 'max:64'],
             'search' => ['sometimes', 'nullable', 'string', 'max:128'],
             'from' => ['sometimes', 'nullable', 'date'],
             'to' => ['sometimes', 'nullable', 'date', 'after_or_equal:from'],

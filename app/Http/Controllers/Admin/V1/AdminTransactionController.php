@@ -17,10 +17,13 @@ class AdminTransactionController extends Controller
 
     public function index(AdminTransactionIndexRequest $request): JsonResponse
     {
-        $paginator = $this->transactionHistoryService->listAll($request->validated());
+        $filters = $request->validated();
+        $paginator = $this->transactionHistoryService->listAll($filters);
+        $summary = $this->transactionHistoryService->summarizeAll($filters);
 
         return ApiResponse::success([
             'transactions' => TransactionResource::collection($paginator->items()),
+            'summary' => $summary,
             'pagination' => [
                 'currentPage' => $paginator->currentPage(),
                 'perPage' => $paginator->perPage(),

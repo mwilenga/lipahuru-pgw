@@ -46,11 +46,14 @@ class MerchantPortalController extends Controller
     {
         /** @var Merchant $merchant */
         $merchant = $request->attributes->get('merchant');
+        $filters = $request->validated();
 
-        $paginator = $this->transactionHistoryService->listForMerchant($merchant, $request->validated());
+        $paginator = $this->transactionHistoryService->listForMerchant($merchant, $filters);
+        $summary = $this->transactionHistoryService->summarizeForMerchant($merchant, $filters);
 
         return ApiResponse::success([
             'transactions' => TransactionResource::collection($paginator->items()),
+            'summary' => $summary,
             'pagination' => [
                 'currentPage' => $paginator->currentPage(),
                 'perPage' => $paginator->perPage(),

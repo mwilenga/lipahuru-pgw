@@ -25,7 +25,7 @@ class AdminMerchantController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $merchants = $this->merchantService->list((int) $request->query('perPage', 25));
+        $merchants = $this->merchantService->list((int) $request->query('perPage', 10));
 
         return ApiResponse::success([
             'merchants' => MerchantResource::collection($merchants->items()),

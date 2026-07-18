@@ -16,9 +16,9 @@ class MerchantService
         private readonly MerchantRepositoryInterface $merchantRepository,
     ) {}
 
-    public function list(int $perPage = 25): LengthAwarePaginator
+    public function list(int $perPage = 10): LengthAwarePaginator
     {
-        return Merchant::query()->latest()->paginate($perPage);
+        return Merchant::query()->latest('id')->paginate($perPage);
     }
 
     public function findById(int $id): Merchant

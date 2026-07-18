@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\V1\AdminAuthController;
+use App\Http\Controllers\Admin\V1\AdminMerchantCommissionController;
 use App\Http\Controllers\Admin\V1\AdminMerchantController;
 use App\Http\Controllers\Admin\V1\AdminMonitoringController;
 use App\Http\Controllers\Admin\V1\AdminPortalController;
@@ -72,6 +73,8 @@ Route::prefix('admin/v1')
         Route::get('/merchants/{merchant}/credentials', [AdminMerchantController::class, 'credentials']);
         Route::post('/merchants/{merchant}/rotate-credentials', [AdminMerchantController::class, 'rotateCredentials']);
         Route::post('/merchants/{merchant}/reset-portal-password', [AdminMerchantController::class, 'resetPortalPassword']);
+        Route::get('/merchants/{merchant}/commissions', [AdminMerchantCommissionController::class, 'index']);
+        Route::put('/merchants/{merchant}/commissions', [AdminMerchantCommissionController::class, 'update']);
 
         Route::get('/providers', [AdminProviderController::class, 'providers']);
         Route::get('/networks', [AdminProviderController::class, 'networks']);

@@ -48,6 +48,11 @@ class Merchant extends Authenticatable
         return $this->hasMany(Wallet::class);
     }
 
+    public function commissions(): HasMany
+    {
+        return $this->hasMany(MerchantCommission::class);
+    }
+
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
