@@ -7,6 +7,7 @@ use App\Enums\ProviderCode;
 use App\Enums\TransactionStatus;
 use App\Models\Merchant;
 use App\Models\Transaction;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -142,7 +143,22 @@ class TransactionHistoryService
                         ->orWhere('provider_receipt_no', 'like', "%{$search}%");
                 });
             })
-            ->when(isset($filters['from']) && $filters['from'] !== '', fn ($q) => $q->whereDate('created_at', '>=', $filters['from']))
-            ->when(isset($filters['to']) && $filters['to'] !== '', fn ($q) => $q->whereDate('created_at', '<=', $filters['to']));
+            ->when(isset($filters['from']) && $filters['from'] !== '', function ($q) use ($filters) {
+                $start = Carbon::parse((string) $filters['from'], $this->filterTimezone())
+                    ->startOfDay()
+                    ->utc();
+                $q->where('created_at', '>=', $start);
+            })
+            ->when(isset($filters['to']) && $filters['to'] !== '', function ($q) use ($filters) {
+                $end = Carbon::parse((string) $filters['to'], $this->filterTimezone())
+                    ->endOfDay()
+                    ->utc();
+                $q->where('created_at', '<=', $end);
+            });
+    }
+
+    private function filterTimezone(): string
+    {
+        return (string) config('payment-gateway.filter_timezone', 'Africa/Dar_es_Salaam');
     }
 }
