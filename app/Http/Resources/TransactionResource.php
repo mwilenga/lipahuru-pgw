@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Merchant\CommissionFeeCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +13,8 @@ class TransactionResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $fees = app(CommissionFeeCalculator::class)->forTransaction($this->resource);
+
         return [
             'transactionId' => $this->transaction_id,
             'requestId' => $this->request_id,
@@ -22,6 +25,8 @@ class TransactionResource extends JsonResource
             'transactionStatus' => $this->status?->value,
             'providerCode' => $this->providerNetwork?->code?->value,
             'amount' => (string) $this->amount,
+            'fee' => $fees['fee'],
+            'net' => $fees['net'],
             'currency' => $this->currency,
             'msisdn' => $this->msisdn,
             'callbackUrl' => $this->callback_url,

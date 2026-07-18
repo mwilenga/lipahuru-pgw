@@ -25,20 +25,20 @@ class MerchantPortalService
      */
     public function dashboard(Merchant $merchant): array
     {
-        $today = Carbon::today();
+        [$todayStart, $todayEnd] = $this->todayBounds();
 
         $collectionsToday = (float) Transaction::query()
             ->where('merchant_id', $merchant->id)
             ->where('operation', PaymentOperation::C2bPush)
             ->where('status', TransactionStatus::Success)
-            ->whereDate('finalized_at', $today)
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->sum('amount');
 
         $disbursementsToday = (float) Transaction::query()
             ->where('merchant_id', $merchant->id)
             ->where('operation', PaymentOperation::B2cDisbursement)
             ->where('status', TransactionStatus::Success)
-            ->whereDate('finalized_at', $today)
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->sum('amount');
 
         $pending = Transaction::query()
@@ -86,6 +86,19 @@ class MerchantPortalService
             ])->values()->all(),
             'recentTransactions' => TransactionResource::collection($recent->items())->resolve(),
             'currency' => $merchant->default_currency,
+        ];
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function todayBounds(): array
+    {
+        $tz = (string) config('payment-gateway.filter_timezone', 'Africa/Dar_es_Salaam');
+
+        return [
+            Carbon::now($tz)->startOfDay()->utc(),
+            Carbon::now($tz)->endOfDay()->utc(),
         ];
     }
 }

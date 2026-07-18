@@ -24,19 +24,19 @@ class AdminPortalService
      */
     public function dashboard(): array
     {
-        $today = Carbon::today();
+        [$todayStart, $todayEnd] = $this->todayBounds();
         $currency = (string) config('payment-gateway.default_currency', 'TZS');
 
         $collectionsToday = (float) Transaction::query()
             ->where('operation', PaymentOperation::C2bPush)
             ->where('status', TransactionStatus::Success)
-            ->whereDate('finalized_at', $today)
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->sum('amount');
 
         $disbursementsToday = (float) Transaction::query()
             ->where('operation', PaymentOperation::B2cDisbursement)
             ->where('status', TransactionStatus::Success)
-            ->whereDate('finalized_at', $today)
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->sum('amount');
 
         $pending = Transaction::query()
@@ -111,6 +111,19 @@ class AdminPortalService
             'providerWallets' => $providerTotals,
             'recentTransactions' => TransactionResource::collection($recent->items())->resolve(),
             'currency' => $currency,
+        ];
+    }
+
+    /**
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function todayBounds(): array
+    {
+        $tz = (string) config('payment-gateway.filter_timezone', 'Africa/Dar_es_Salaam');
+
+        return [
+            Carbon::now($tz)->startOfDay()->utc(),
+            Carbon::now($tz)->endOfDay()->utc(),
         ];
     }
 }

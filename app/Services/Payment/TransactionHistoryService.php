@@ -24,7 +24,7 @@ class TransactionHistoryService
             Transaction::query()->where('merchant_id', $merchant->id),
             $filters,
         )
-            ->with(['providerNetwork', 'paymentProvider'])
+            ->with(['providerNetwork', 'paymentProvider', 'merchant.commissions'])
             ->latest('id')
             ->paginate($perPage);
     }
@@ -64,7 +64,7 @@ class TransactionHistoryService
         $perPage = (int) ($filters['perPage'] ?? 10);
 
         return $this->applyFilters(Transaction::query(), $filters)
-            ->with(['providerNetwork', 'paymentProvider', 'merchant'])
+            ->with(['providerNetwork', 'paymentProvider', 'merchant.commissions'])
             ->latest('id')
             ->paginate($perPage);
     }
