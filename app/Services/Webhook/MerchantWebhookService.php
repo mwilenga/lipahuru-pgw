@@ -27,6 +27,7 @@ class MerchantWebhookService
             'url' => $callbackUrl,
             'payload' => $payload,
             'attempt' => 1,
+            'sent_count' => 0,
             'max_attempts' => (int) config('payment-gateway.callback_max_retries', 10),
             'status' => 'PENDING',
             'next_retry_at' => now(),
@@ -37,9 +38,28 @@ class MerchantWebhookService
         return $delivery;
     }
 
+    /**
+     * Re-send the same webhook delivery row (manual or programmatic).
+     * Increments sent_count when the HTTP POST runs in attemptDelivery().
+     */
+    public function resend(int $deliveryId): WebhookDelivery
+    {
+        $delivery = WebhookDelivery::query()->findOrFail($deliveryId);
+
+        $delivery->update([
+            'status' => 'PENDING',
+            'next_retry_at' => now(),
+        ]);
+
+        return $this->attemptDelivery($delivery->id);
+    }
+
     public function attemptDelivery(int $deliveryId): WebhookDelivery
     {
         $delivery = WebhookDelivery::query()->findOrFail($deliveryId);
+
+        $delivery->increment('sent_count');
+        $delivery->refresh();
 
         try {
             $response = \Illuminate\Support\Facades\Http::timeout((int) config('payment-gateway.callback_timeout', 30))
@@ -48,11 +68,13 @@ class MerchantWebhookService
                 ])
                 ->post($delivery->url, $delivery->payload);
 
+            $merchantResponse = $this->truncateResponse($response->body());
+
             if ($response->successful()) {
                 $delivery->update([
                     'status' => 'DELIVERED',
                     'http_status' => $response->status(),
-                    'response_body' => $response->body(),
+                    'response_body' => $merchantResponse,
                     'delivered_at' => now(),
                     'next_retry_at' => null,
                 ]);
@@ -60,10 +82,19 @@ class MerchantWebhookService
                 return $delivery->refresh();
             }
 
-            return $this->scheduleRetry($delivery, $response->status(), $response->body());
+            return $this->scheduleRetry($delivery, $response->status(), $merchantResponse);
         } catch (\Throwable $exception) {
-            return $this->scheduleRetry($delivery, null, $exception->getMessage());
+            return $this->scheduleRetry($delivery, null, $this->truncateResponse($exception->getMessage()));
         }
+    }
+
+    private function truncateResponse(?string $body): ?string
+    {
+        if ($body === null) {
+            return null;
+        }
+
+        return mb_substr($body, 0, 65535);
     }
 
     private function queueDelivery(WebhookDelivery $delivery): void

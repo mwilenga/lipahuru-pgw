@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LIPAHURU_BASE="${LIPAHURU_BASE:-https://lipahuru-api.gotiketi.co.tz}"
+LIPAHURU_BASE="${LIPAHURU_BASE:-https://pgw.lipahuru.co.tz}"
 CLIENT_ID="${CLIENT_ID:-cli_utdpprhengpiir1zlktz6noz}"
 CLIENT_SECRET="${CLIENT_SECRET:-cs_qbpzXqpZHmDzUHDzjitEMr423iB4jk1nqea3yZel0gOA1dTG}"
 
