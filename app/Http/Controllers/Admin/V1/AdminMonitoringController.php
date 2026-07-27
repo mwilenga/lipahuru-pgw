@@ -7,6 +7,7 @@ use App\Http\Resources\AuditLogResource;
 use App\Http\Resources\WebhookDeliveryResource;
 use App\Models\AuditLog;
 use App\Models\WebhookDelivery;
+use App\Services\Webhook\MerchantWebhookService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,10 @@ use Illuminate\Support\Facades\DB;
 
 class AdminMonitoringController extends Controller
 {
+    public function __construct(
+        private readonly MerchantWebhookService $merchantWebhookService,
+    ) {}
+
     public function health(): JsonResponse
     {
         $checks = [
@@ -60,6 +65,15 @@ class AdminMonitoringController extends Controller
                 'lastPage' => $paginator->lastPage(),
             ],
         ]);
+    }
+
+    public function resendWebhook(int $id): JsonResponse
+    {
+        $delivery = $this->merchantWebhookService->resend($id);
+
+        return ApiResponse::success(
+            new WebhookDeliveryResource($delivery->loadMissing('transaction')),
+        );
     }
 
     public function auditLogs(Request $request): JsonResponse
