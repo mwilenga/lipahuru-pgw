@@ -47,7 +47,12 @@ class WebhookRegistrationService
             abort(404);
         }
 
-        return $this->merchantWebhookService->resend($delivery->id);
+        $delivery->update([
+            'status' => 'PENDING',
+            'next_retry_at' => now(),
+        ]);
+
+        return $this->merchantWebhookService->attemptDelivery($delivery->id);
     }
 
     public function listDeliveries(?int $merchantId = null, int $perPage = 25): LengthAwarePaginator

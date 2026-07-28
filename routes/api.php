@@ -39,9 +39,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/webhooks', [WebhookController::class, 'index']);
         Route::post('/webhooks', [WebhookController::class, 'store']);
-        Route::get('/webhook-deliveries', [WebhookController::class, 'deliveries']);
         Route::post('/webhooks/{id}/retry', [WebhookController::class, 'retry']);
-        Route::post('/webhook-deliveries/{id}/resend', [WebhookController::class, 'retry']);
 
         Route::middleware('gateway.idempotency')->group(function (): void {
             Route::post('/payments/collections/push', [CollectionController::class, 'push'])
@@ -83,7 +81,6 @@ Route::prefix('admin/v1')
         Route::get('/routes', [AdminProviderController::class, 'routes']);
 
         Route::get('/webhook-logs', [AdminMonitoringController::class, 'webhookLogs']);
-        Route::post('/webhook-logs/{id}/resend', [AdminMonitoringController::class, 'resendWebhook']);
         Route::get('/audit-logs', [AdminMonitoringController::class, 'auditLogs']);
 
         Route::get('/reports/merchant-summary', [AdminReportController::class, 'merchantSummary']);

@@ -2,9 +2,12 @@
 
 namespace App\Services\Webhook;
 
+use App\Jobs\DeliverMerchantWebhookJob;
 use App\Models\Transaction;
 use App\Models\WebhookDelivery;
-use App\Jobs\DeliverMerchantWebhookJob;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class MerchantWebhookService
 {
@@ -20,14 +23,13 @@ class MerchantWebhookService
         $payload = $this->buildPaymentFinalizedPayload($transaction);
 
         $delivery = WebhookDelivery::query()->create([
-            'callback_id' => (string) \Illuminate\Support\Str::uuid(),
+            'callback_id' => (string) Str::uuid(),
             'merchant_id' => $merchant->id,
             'transaction_id' => $transaction->id,
             'event_type' => 'PAYMENT_FINALIZED',
             'url' => $callbackUrl,
             'payload' => $payload,
-            'attempt' => 1,
-            'sent_count' => 0,
+            'attempt' => 0,
             'max_attempts' => (int) config('payment-gateway.callback_max_retries', 10),
             'status' => 'PENDING',
             'next_retry_at' => now(),
@@ -38,60 +40,64 @@ class MerchantWebhookService
         return $delivery;
     }
 
-    /**
-     * Re-send the same webhook delivery row (manual or programmatic).
-     * Increments sent_count when the HTTP POST runs in attemptDelivery().
-     */
-    public function resend(int $deliveryId): WebhookDelivery
-    {
-        $delivery = WebhookDelivery::query()->findOrFail($deliveryId);
-
-        $delivery->update([
-            'status' => 'PENDING',
-            'next_retry_at' => now(),
-        ]);
-
-        return $this->attemptDelivery($delivery->id);
-    }
-
     public function attemptDelivery(int $deliveryId): WebhookDelivery
     {
         $delivery = WebhookDelivery::query()->findOrFail($deliveryId);
 
-        $delivery->increment('sent_count');
+        $delivery->increment('attempt');
         $delivery->refresh();
 
         try {
-            $response = \Illuminate\Support\Facades\Http::timeout((int) config('payment-gateway.callback_timeout', 30))
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
+            $response = Http::timeout((int) config('payment-gateway.callback_timeout', 30))
+                ->acceptJson()
+                ->asJson()
                 ->post($delivery->url, $delivery->payload);
 
-            $merchantResponse = $this->truncateResponse($response->body());
+            $merchantResponse = $this->normalizeMerchantResponse($response->body());
+
+            Log::info('Merchant callback response received', [
+                'deliveryId' => $delivery->id,
+                'url' => $delivery->url,
+                'attempt' => $delivery->attempt,
+                'httpStatus' => $response->status(),
+                'merchantResponse' => $merchantResponse,
+            ]);
 
             if ($response->successful()) {
-                $delivery->update([
+                $delivery->forceFill([
                     'status' => 'DELIVERED',
                     'http_status' => $response->status(),
                     'response_body' => $merchantResponse,
                     'delivered_at' => now(),
                     'next_retry_at' => null,
-                ]);
+                ])->save();
 
                 return $delivery->refresh();
             }
 
             return $this->scheduleRetry($delivery, $response->status(), $merchantResponse);
         } catch (\Throwable $exception) {
-            return $this->scheduleRetry($delivery, null, $this->truncateResponse($exception->getMessage()));
+            Log::warning('Merchant callback delivery failed', [
+                'deliveryId' => $delivery->id,
+                'url' => $delivery->url,
+                'attempt' => $delivery->attempt,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return $this->scheduleRetry(
+                $delivery,
+                null,
+                $this->normalizeMerchantResponse($exception->getMessage()),
+            );
         }
     }
 
-    private function truncateResponse(?string $body): ?string
+    private function normalizeMerchantResponse(?string $body): string
     {
-        if ($body === null) {
-            return null;
+        $body ??= '';
+
+        if (! mb_check_encoding($body, 'UTF-8')) {
+            $body = mb_convert_encoding($body, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
         }
 
         return mb_substr($body, 0, 65535);
@@ -102,33 +108,28 @@ class MerchantWebhookService
         DeliverMerchantWebhookJob::dispatch($delivery->id);
     }
 
-    private function scheduleRetry(WebhookDelivery $delivery, ?int $httpStatus, ?string $responseBody): WebhookDelivery
+    private function scheduleRetry(WebhookDelivery $delivery, ?int $httpStatus, string $responseBody): WebhookDelivery
     {
-        $attempt = $delivery->attempt + 1;
-        $maxAttempts = $delivery->max_attempts;
-
-        if ($attempt > $maxAttempts) {
-            $delivery->update([
+        if ($delivery->attempt >= $delivery->max_attempts) {
+            $delivery->forceFill([
                 'status' => 'FAILED',
                 'http_status' => $httpStatus,
                 'response_body' => $responseBody,
-                'attempt' => $attempt,
                 'next_retry_at' => null,
-            ]);
+            ])->save();
 
             return $delivery->refresh();
         }
 
         $delays = config('payment-gateway.webhook_retry_delays', [60, 300, 900, 3600, 21600, 86400]);
-        $delaySeconds = $delays[min($attempt - 2, count($delays) - 1)] ?? end($delays);
+        $delaySeconds = $delays[min($delivery->attempt - 1, count($delays) - 1)] ?? end($delays);
 
-        $delivery->update([
+        $delivery->forceFill([
             'status' => 'RETRYING',
             'http_status' => $httpStatus,
             'response_body' => $responseBody,
-            'attempt' => $attempt,
             'next_retry_at' => now()->addSeconds((int) $delaySeconds),
-        ]);
+        ])->save();
 
         DeliverMerchantWebhookJob::dispatch($delivery->id)
             ->delay(now()->addSeconds((int) $delaySeconds));

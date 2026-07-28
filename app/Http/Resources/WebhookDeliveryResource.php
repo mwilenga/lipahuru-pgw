@@ -20,7 +20,6 @@ class WebhookDeliveryResource extends JsonResource
             'eventType' => $this->event_type,
             'url' => $this->url,
             'attempt' => $this->attempt,
-            'sentCount' => $this->sent_count,
             'maxAttempts' => $this->max_attempts,
             'status' => $this->status,
             'httpStatus' => $this->http_status,
