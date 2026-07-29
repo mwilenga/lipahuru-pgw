@@ -18,6 +18,7 @@ class DeliverMerchantWebhookJob implements ShouldQueue
 
     public function handle(MerchantWebhookService $merchantWebhookService): void
     {
+        info('Delivering merchant webhook', ['deliveryId' => $this->deliveryId]);
         $merchantWebhookService->attemptDelivery($this->deliveryId);
     }
 }

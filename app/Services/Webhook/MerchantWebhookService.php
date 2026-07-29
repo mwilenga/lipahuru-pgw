@@ -35,8 +35,11 @@ class MerchantWebhookService
             'next_retry_at' => now(),
         ]);
 
+        // Queue the delivery to be processed
+        // This will be processed by the DeliverMerchantWebhookJob
         $this->queueDelivery($delivery);
 
+        // Return the delivery to be used by the caller
         return $delivery;
     }
 
@@ -105,6 +108,7 @@ class MerchantWebhookService
 
     private function queueDelivery(WebhookDelivery $delivery): void
     {
+        info('Queueing delivery', ['deliveryId' => $delivery->id]);
         DeliverMerchantWebhookJob::dispatch($delivery->id);
     }
 
