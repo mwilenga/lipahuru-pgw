@@ -93,6 +93,11 @@ class Merchant extends Authenticatable
         return $this->hasMany(WebhookDelivery::class);
     }
 
+    public function floatTopups(): HasMany
+    {
+        return $this->hasMany(FloatTopup::class);
+    }
+
     public function idempotencyRecords(): HasMany
     {
         return $this->hasMany(IdempotencyRecord::class);

@@ -3,6 +3,7 @@
 namespace App\Services\Wallet;
 
 use App\Enums\GatewayErrorCode;
+use App\Enums\WalletType;
 use App\Exceptions\GatewayException;
 use App\Models\BalanceReservation;
 use App\Models\LedgerEntry;
@@ -196,11 +197,68 @@ class WalletLedgerService
             ]);
 
             if ($wallet->parent_wallet_id !== null) {
-                $this->postMirrorEntry(
+                $this->postMirrorCredit(
                     walletId: $wallet->parent_wallet_id,
-                    transaction: $transaction,
                     amount: $amount,
+                    currency: $transaction->currency,
+                    reference: $transaction->transaction_id,
                     description: 'Collection mirror credit on parent wallet',
+                    transactionId: $transaction->id,
+                );
+            }
+        });
+    }
+
+    public function creditDisbursementFloat(
+        Wallet $wallet,
+        string $amount,
+        string $currency,
+        string $reference,
+        string $description,
+    ): void {
+        if ($wallet->wallet_type !== WalletType::DisbursementLeaf) {
+            throw new GatewayException(
+                GatewayErrorCode::GeneralError,
+                'Float topups can only credit disbursement wallets',
+                httpStatus: 422,
+            );
+        }
+
+        DB::transaction(function () use ($wallet, $amount, $currency, $reference, $description): void {
+            $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($wallet->id);
+
+            if ($lockedWallet?->balance === null) {
+                throw new GatewayException(GatewayErrorCode::GeneralError, 'Wallet balance not found', httpStatus: 422);
+            }
+
+            $balance = $lockedWallet->balance;
+            $availableAfter = bcadd((string) $balance->available, $amount, 4);
+            $totalAfter = bcadd((string) $balance->total, $amount, 4);
+
+            $balance->update([
+                'available' => $availableAfter,
+                'total' => $totalAfter,
+            ]);
+
+            LedgerEntry::query()->create([
+                'wallet_id' => $wallet->id,
+                'transaction_id' => null,
+                'entry_type' => 'CREDIT',
+                'amount' => $amount,
+                'currency' => $currency,
+                'balance_after' => $totalAfter,
+                'reference' => $reference,
+                'description' => $description,
+                'created_at' => now(),
+            ]);
+
+            if ($wallet->parent_wallet_id !== null) {
+                $this->postMirrorCredit(
+                    walletId: $wallet->parent_wallet_id,
+                    amount: $amount,
+                    currency: $currency,
+                    reference: $reference,
+                    description: 'Float topup mirror credit on parent wallet',
                 );
             }
         });
@@ -217,7 +275,7 @@ class WalletLedgerService
     public function syncParentWalletBalances(?int $merchantId = null): int
     {
         $query = Wallet::query()
-            ->where('wallet_type', \App\Enums\WalletType::MerchantParent)
+            ->where('wallet_type', WalletType::MerchantParent)
             ->with(['balance', 'childWallets.balance']);
 
         if ($merchantId !== null) {
@@ -257,8 +315,14 @@ class WalletLedgerService
         return $updated;
     }
 
-    private function postMirrorEntry(int $walletId, Transaction $transaction, string $amount, string $description): void
-    {
+    private function postMirrorCredit(
+        int $walletId,
+        string $amount,
+        string $currency,
+        string $reference,
+        string $description,
+        ?int $transactionId = null,
+    ): void {
         $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($walletId);
 
         if ($lockedWallet?->balance === null) {
@@ -276,22 +340,24 @@ class WalletLedgerService
 
         LedgerEntry::query()->create([
             'wallet_id' => $walletId,
-            'transaction_id' => $transaction->id,
+            'transaction_id' => $transactionId,
             'entry_type' => 'CREDIT',
             'amount' => $amount,
-            'currency' => $transaction->currency,
+            'currency' => $currency,
             'balance_after' => $totalAfter,
-            'reference' => $transaction->transaction_id,
+            'reference' => $reference,
             'description' => $description,
             'created_at' => now(),
         ]);
 
         if ($lockedWallet->parent_wallet_id !== null) {
-            $this->postMirrorEntry(
+            $this->postMirrorCredit(
                 walletId: $lockedWallet->parent_wallet_id,
-                transaction: $transaction,
                 amount: $amount,
-                description: 'Collection mirror credit on parent wallet',
+                currency: $currency,
+                reference: $reference,
+                description: $description,
+                transactionId: $transactionId,
             );
         }
     }

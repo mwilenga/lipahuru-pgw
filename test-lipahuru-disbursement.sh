@@ -5,7 +5,7 @@ LIPAHURU_BASE="${LIPAHURU_BASE:-https://pgw.lipahuru.co.tz}"
 CLIENT_ID="${CLIENT_ID:-cli_utdpprhengpiir1zlktz6noz}"
 CLIENT_SECRET="${CLIENT_SECRET:-cs_qbpzXqpZHmDzUHDzjitEMr423iB4jk1nqea3yZel0gOA1dTG}"
 MSISDN="${MSISDN:-255768102956}"
-AMOUNT="${AMOUNT:-100.00}"
+AMOUNT="${AMOUNT:-1000.00}"
 PROVIDER_CODE="${PROVIDER_CODE:-VODACOM}"
 CALLBACK_URL="${CALLBACK_URL:-https://merchant.test/callback}"
 
@@ -68,7 +68,35 @@ fail_if_not_json() {
   fi
 }
 
+print_postman() {
+  local METHOD="$1"
+  local URL="$2"
+  local HEADERS="$3"
+  local BODY="${4-}"
+
+  echo ""
+  echo "---------- Postman ----------"
+  echo "Method: ${METHOD}"
+  echo "URL:    ${URL}"
+  echo ""
+  echo "Headers:"
+  echo "${HEADERS}"
+  echo ""
+  echo "Body:"
+  if [ -n "${BODY}" ]; then
+    echo "${BODY}"
+  else
+    echo "(empty)"
+  fi
+  echo "-----------------------------"
+  echo ""
+}
+
 echo "==> 1) OAuth token"
+print_postman "POST" "$LIPAHURU_BASE/oauth/token" \
+  "Content-Type: application/x-www-form-urlencoded" \
+  "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}"
+
 TOKEN_HTTP=$(curl -sS -w "\n%{http_code}" -X POST "$LIPAHURU_BASE/oauth/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}")
@@ -91,6 +119,14 @@ EOF
 
 echo "==> 2) B2C disbursement"
 sign_request "POST" "/api/v1/payments/disbursements" "$BODY"
+
+print_postman "POST" "$LIPAHURU_BASE/api/v1/payments/disbursements" \
+  "Authorization: Bearer ${ACCESS_TOKEN}
+X-Signature: ${X_SIGNATURE}
+X-Idempotency-Key: ${IDEMPOTENCY_KEY}
+Content-Type: application/json
+Accept: application/json" \
+  "$BODY"
 
 CREATE_HTTP=$(curl -sS -w "\n%{http_code}" -X POST "$LIPAHURU_BASE/api/v1/payments/disbursements" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
@@ -115,6 +151,11 @@ fi
 
 echo "==> 3) Query ${TXN_ID}"
 sign_request "GET" "/api/v1/payments/${TXN_ID}" ""
+
+print_postman "GET" "$LIPAHURU_BASE/api/v1/payments/${TXN_ID}" \
+  "Authorization: Bearer ${ACCESS_TOKEN}
+X-Signature: ${X_SIGNATURE}
+Accept: application/json"
 
 QUERY_HTTP=$(curl -sS -w "\n%{http_code}" -X GET "$LIPAHURU_BASE/api/v1/payments/${TXN_ID}" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \

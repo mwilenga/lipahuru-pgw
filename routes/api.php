@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\V1\AdminAuthController;
+use App\Http\Controllers\Admin\V1\AdminFloatTopupController;
 use App\Http\Controllers\Admin\V1\AdminMerchantCommissionController;
 use App\Http\Controllers\Admin\V1\AdminMerchantController;
 use App\Http\Controllers\Admin\V1\AdminMonitoringController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WebhookController;
+use App\Http\Controllers\Portal\MerchantFloatTopupController;
 use App\Http\Controllers\Portal\MerchantPortalController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,6 +61,8 @@ Route::prefix('v1/portal')
         Route::get('/dashboard', [MerchantPortalController::class, 'dashboard']);
         Route::get('/wallets', [MerchantPortalController::class, 'wallets']);
         Route::get('/transactions', [MerchantPortalController::class, 'transactions']);
+        Route::get('/float-topups', [MerchantFloatTopupController::class, 'index']);
+        Route::post('/float-topups', [MerchantFloatTopupController::class, 'store']);
     });
 
 Route::prefix('admin/v1')
@@ -79,6 +83,11 @@ Route::prefix('admin/v1')
         Route::get('/providers', [AdminProviderController::class, 'providers']);
         Route::get('/networks', [AdminProviderController::class, 'networks']);
         Route::get('/routes', [AdminProviderController::class, 'routes']);
+
+        Route::get('/float-topups', [AdminFloatTopupController::class, 'index']);
+        Route::post('/float-topups', [AdminFloatTopupController::class, 'store']);
+        Route::post('/float-topups/{id}/approve', [AdminFloatTopupController::class, 'approve']);
+        Route::post('/float-topups/{id}/reject', [AdminFloatTopupController::class, 'reject']);
 
         Route::get('/webhook-logs', [AdminMonitoringController::class, 'webhookLogs']);
         Route::get('/audit-logs', [AdminMonitoringController::class, 'auditLogs']);
