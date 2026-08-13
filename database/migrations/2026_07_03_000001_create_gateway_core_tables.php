@@ -279,8 +279,7 @@ return new class extends Migration
             $table->string('event_type', 64);
             $table->string('url');
             $table->json('payload');
-            $table->unsignedSmallInteger('attempt')->default(1);
-            $table->unsignedInteger('sent_count')->default(0);
+            $table->unsignedSmallInteger('attempt')->default(0);
             $table->unsignedSmallInteger('max_attempts')->default(10);
             $table->string('status', 32)->default('PENDING');
             $table->unsignedSmallInteger('http_status')->nullable();

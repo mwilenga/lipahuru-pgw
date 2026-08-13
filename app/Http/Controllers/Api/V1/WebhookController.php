@@ -42,27 +42,6 @@ class WebhookController extends Controller
         );
     }
 
-    public function deliveries(Request $request): JsonResponse
-    {
-        /** @var Merchant $merchant */
-        $merchant = $request->attributes->get('merchant');
-
-        $paginator = $this->webhookRegistrationService->listDeliveries(
-            $merchant->id,
-            (int) $request->query('perPage', 25),
-        );
-
-        return ApiResponse::success([
-            'deliveries' => WebhookDeliveryResource::collection($paginator->items()),
-            'pagination' => [
-                'currentPage' => $paginator->currentPage(),
-                'perPage' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'lastPage' => $paginator->lastPage(),
-            ],
-        ]);
-    }
-
     public function retry(Request $request, int $id): JsonResponse
     {
         /** @var Merchant $merchant */

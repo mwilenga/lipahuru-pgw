@@ -13,7 +13,7 @@ use Tests\GatewayTestCase;
 
 class MerchantWebhookDeliveryTest extends GatewayTestCase
 {
-    public function test_attempt_delivery_saves_merchant_response_and_increments_sent_count(): void
+    public function test_attempt_delivery_saves_merchant_response_and_increments_attempt(): void
     {
         Queue::fake();
 
@@ -45,20 +45,20 @@ class MerchantWebhookDeliveryTest extends GatewayTestCase
         $delivery = $service->dispatchPaymentFinalized($transaction);
 
         $this->assertNotNull($delivery);
-        $this->assertSame(0, $delivery->sent_count);
+        $this->assertSame(0, $delivery->attempt);
 
         $afterFirst = $service->attemptDelivery($delivery->id);
-        $this->assertSame(1, $afterFirst->sent_count);
+        $this->assertSame(1, $afterFirst->attempt);
         $this->assertSame(500, $afterFirst->http_status);
         $this->assertStringContainsString('ok', (string) $afterFirst->response_body);
         $this->assertSame('RETRYING', $afterFirst->status);
 
-        $afterResend = $service->resend($delivery->id);
-        $this->assertSame($delivery->id, $afterResend->id);
-        $this->assertSame(2, $afterResend->sent_count);
-        $this->assertSame(200, $afterResend->http_status);
-        $this->assertStringContainsString('received', (string) $afterResend->response_body);
-        $this->assertSame('DELIVERED', $afterResend->status);
+        $afterRetry = $service->attemptDelivery($delivery->id);
+        $this->assertSame($delivery->id, $afterRetry->id);
+        $this->assertSame(2, $afterRetry->attempt);
+        $this->assertSame(200, $afterRetry->http_status);
+        $this->assertStringContainsString('received', (string) $afterRetry->response_body);
+        $this->assertSame('DELIVERED', $afterRetry->status);
 
         $this->assertSame(1, WebhookDelivery::query()->count());
     }

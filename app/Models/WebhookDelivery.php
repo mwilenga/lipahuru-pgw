@@ -15,7 +15,6 @@ class WebhookDelivery extends Model
         'url',
         'payload',
         'attempt',
-        'sent_count',
         'max_attempts',
         'status',
         'http_status',
