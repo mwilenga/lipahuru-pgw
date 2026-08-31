@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\V1\AdminProviderController;
 use App\Http\Controllers\Admin\V1\AdminReportController;
 use App\Http\Controllers\Admin\V1\AdminSettlementController;
 use App\Http\Controllers\Admin\V1\AdminTransactionController;
+use App\Http\Controllers\Admin\V1\AdminWalletTransferController;
 use App\Http\Controllers\Api\V1\CollectionController;
 use App\Http\Controllers\Api\V1\DisbursementController;
 use App\Http\Controllers\Api\V1\MerchantAuthController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WebhookController;
 use App\Http\Controllers\Portal\MerchantFloatTopupController;
 use App\Http\Controllers\Portal\MerchantPortalController;
+use App\Http\Controllers\Portal\MerchantWalletTransferController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/admin/v1/login', [AdminAuthController::class, 'login']);
@@ -63,6 +65,9 @@ Route::prefix('v1/portal')
         Route::get('/transactions', [MerchantPortalController::class, 'transactions']);
         Route::get('/float-topups', [MerchantFloatTopupController::class, 'index']);
         Route::post('/float-topups', [MerchantFloatTopupController::class, 'store']);
+        Route::get('/wallet-transfers', [MerchantWalletTransferController::class, 'index']);
+        Route::get('/wallet-transfers/transferable-wallets', [MerchantWalletTransferController::class, 'transferableWallets']);
+        Route::post('/wallet-transfers', [MerchantWalletTransferController::class, 'store']);
     });
 
 Route::prefix('admin/v1')
@@ -88,6 +93,12 @@ Route::prefix('admin/v1')
         Route::post('/float-topups', [AdminFloatTopupController::class, 'store']);
         Route::post('/float-topups/{id}/approve', [AdminFloatTopupController::class, 'approve']);
         Route::post('/float-topups/{id}/reject', [AdminFloatTopupController::class, 'reject']);
+
+        Route::get('/wallet-transfers', [AdminWalletTransferController::class, 'index']);
+        Route::get('/wallet-transfers/transferable-wallets/{merchantId}', [AdminWalletTransferController::class, 'transferableWallets']);
+        Route::post('/wallet-transfers', [AdminWalletTransferController::class, 'store']);
+        Route::post('/wallet-transfers/{id}/approve', [AdminWalletTransferController::class, 'approve']);
+        Route::post('/wallet-transfers/{id}/reject', [AdminWalletTransferController::class, 'reject']);
 
         Route::get('/webhook-logs', [AdminMonitoringController::class, 'webhookLogs']);
         Route::get('/audit-logs', [AdminMonitoringController::class, 'auditLogs']);

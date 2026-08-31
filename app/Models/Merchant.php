@@ -98,6 +98,11 @@ class Merchant extends Authenticatable
         return $this->hasMany(FloatTopup::class);
     }
 
+    public function walletTransfers(): HasMany
+    {
+        return $this->hasMany(WalletTransfer::class);
+    }
+
     public function idempotencyRecords(): HasMany
     {
         return $this->hasMany(IdempotencyRecord::class);
