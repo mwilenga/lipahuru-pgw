@@ -10,13 +10,11 @@ use App\Models\Merchant;
 use App\Models\Transaction;
 use App\Models\Wallet;
 use App\Services\Payment\TransactionHistoryService;
-use App\Services\Wallet\WalletQueryService;
 use Carbon\Carbon;
 
 class MerchantPortalService
 {
     public function __construct(
-        private readonly WalletQueryService $walletQueryService,
         private readonly TransactionHistoryService $transactionHistoryService,
     ) {}
 
@@ -57,12 +55,10 @@ class MerchantPortalService
 
         $parentWallet = Wallet::query()
             ->where('merchant_id', $merchant->id)
-            ->where('wallet_type', WalletType::MerchantParent)
+            ->where('wallet_type', WalletType::MerchantBalance)
+            ->where('is_active', true)
             ->with('balance')
             ->first();
-
-        $wallets = $this->walletQueryService->listForMerchant($merchant);
-        $providerTotals = $wallets->where('wallet_type', WalletType::ProviderTotal)->values();
 
         $recent = $this->transactionHistoryService->listForMerchant($merchant, ['perPage' => 8]);
 
@@ -77,13 +73,7 @@ class MerchantPortalService
                 'total' => (string) ($parentWallet->balance?->total ?? '0.0000'),
                 'currency' => $parentWallet->currency,
             ] : null,
-            'providerWallets' => $providerTotals->map(fn ($wallet) => [
-                'providerCode' => $wallet->providerNetwork?->code?->value,
-                'name' => $wallet->name,
-                'available' => (string) ($wallet->balance?->available ?? '0.0000'),
-                'total' => (string) ($wallet->balance?->total ?? '0.0000'),
-                'currency' => $wallet->currency,
-            ])->values()->all(),
+            'providerWallets' => [],
             'recentTransactions' => TransactionResource::collection($recent->items())->resolve(),
             'currency' => $merchant->default_currency,
         ];

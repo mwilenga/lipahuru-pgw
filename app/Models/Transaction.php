@@ -16,6 +16,7 @@ class Transaction extends Model
         'merchant_id',
         'provider_network_id',
         'payment_provider_id',
+        'disbursement_batch_id',
         'request_id',
         'reference',
         'external_reference',
@@ -59,6 +60,11 @@ class Transaction extends Model
     public function paymentProvider(): BelongsTo
     {
         return $this->belongsTo(PaymentProvider::class);
+    }
+
+    public function disbursementBatch(): BelongsTo
+    {
+        return $this->belongsTo(DisbursementBatch::class);
     }
 
     public function events(): HasMany

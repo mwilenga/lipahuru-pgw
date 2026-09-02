@@ -6,6 +6,7 @@ use App\Models\IncomingWebhookLog;
 use App\Models\Transaction;
 use App\Providers\Payment\DTOs\ProviderWebhookEvent;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
+use App\Services\Payment\BulkDisbursementService;
 use App\Services\Payment\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class IncomingProviderWebhookService
     public function __construct(
         private readonly TransactionRepositoryInterface $transactionRepository,
         private readonly PaymentService $paymentService,
+        private readonly BulkDisbursementService $bulkDisbursementService,
         private readonly MerchantWebhookService $merchantWebhookService,
     ) {}
 
@@ -80,6 +82,14 @@ class IncomingProviderWebhookService
             });
 
             if ($transaction !== null && $log->fresh()->status === 'PROCESSED') {
+                if ($transaction->disbursement_batch_id !== null) {
+                    $batch = $transaction->disbursementBatch;
+
+                    if ($batch !== null) {
+                        $this->bulkDisbursementService->refreshStatus($batch);
+                    }
+                }
+
                 $this->merchantWebhookService->dispatchPaymentFinalized($transaction->fresh());
 
                 Log::info('GoDigital inbound webhook processed', [

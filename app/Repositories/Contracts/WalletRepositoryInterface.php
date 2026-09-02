@@ -11,6 +11,8 @@ interface WalletRepositoryInterface
 
     public function findByMerchantAndType(int $merchantId, WalletType $type, ?int $providerNetworkId = null): ?Wallet;
 
+    public function findMerchantBalance(int $merchantId): ?Wallet;
+
     public function findWithBalanceForUpdate(int $walletId): ?Wallet;
 
     public function create(array $attributes): Wallet;

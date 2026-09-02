@@ -168,3 +168,65 @@ QUERY_CODE=$(echo "$QUERY_HTTP" | tail -n 1)
 echo "HTTP $QUERY_CODE"
 fail_if_not_json "Transaction query" "$QUERY_BODY"
 echo "$QUERY_BODY" | python3 -m json.tool
+
+echo "==> 4) Bulk B2C disbursement"
+BATCH_REQUEST_ID=$(new_uuid)
+BULK_IDEMPOTENCY_KEY=$(new_uuid)
+ITEM1_REQUEST_ID=$(new_uuid)
+ITEM2_REQUEST_ID=$(new_uuid)
+
+BULK_BODY=$(cat <<EOF
+{"requestId":"${BATCH_REQUEST_ID}","batchReference":"BULK-CURL-$(date +%s)","currency":"TZS","callbackUrl":"${CALLBACK_URL}","items":[{"requestId":"${ITEM1_REQUEST_ID}","providerCode":"${PROVIDER_CODE}","reference":"BULK-1-$(date +%s)","msisdn":"${MSISDN}","amount":${AMOUNT},"narration":"bulk item 1"},{"requestId":"${ITEM2_REQUEST_ID}","providerCode":"YAS","reference":"BULK-2-$(date +%s)","msisdn":"255754123456","amount":${AMOUNT},"narration":"bulk item 2"}]}
+EOF
+)
+
+sign_request "POST" "/api/v1/payments/disbursements/bulk" "$BULK_BODY"
+
+print_postman "POST" "$LIPAHURU_BASE/api/v1/payments/disbursements/bulk" \
+  "Authorization: Bearer ${ACCESS_TOKEN}
+X-Signature: ${X_SIGNATURE}
+X-Idempotency-Key: ${BULK_IDEMPOTENCY_KEY}
+Content-Type: application/json
+Accept: application/json" \
+  "$BULK_BODY"
+
+BULK_HTTP=$(curl -sS -w "\n%{http_code}" -X POST "$LIPAHURU_BASE/api/v1/payments/disbursements/bulk" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "X-Signature: ${X_SIGNATURE}" \
+  -H "X-Idempotency-Key: ${BULK_IDEMPOTENCY_KEY}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  --data-binary "$BULK_BODY")
+
+BULK_BODY_RESP=$(echo "$BULK_HTTP" | sed '$d')
+BULK_CODE=$(echo "$BULK_HTTP" | tail -n 1)
+
+echo "HTTP $BULK_CODE"
+if echo "$BULK_BODY_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('status')=='SUCCESS' else 1)" 2>/dev/null; then
+  echo "$BULK_BODY_RESP" | python3 -m json.tool
+  BATCH_ID=$(echo "$BULK_BODY_RESP" | parse_json "data.batchId")
+else
+  fail_if_not_json "Bulk disbursement" "$BULK_BODY_RESP"
+  echo "$BULK_BODY_RESP" | python3 -m json.tool
+  exit 1
+fi
+
+echo "==> 5) Query bulk batch ${BATCH_ID}"
+sign_request "GET" "/api/v1/payments/disbursements/bulk/${BATCH_ID}" ""
+
+print_postman "GET" "$LIPAHURU_BASE/api/v1/payments/disbursements/bulk/${BATCH_ID}" \
+  "Authorization: Bearer ${ACCESS_TOKEN}
+X-Signature: ${X_SIGNATURE}
+Accept: application/json"
+
+BATCH_HTTP=$(curl -sS -w "\n%{http_code}" -X GET "$LIPAHURU_BASE/api/v1/payments/disbursements/bulk/${BATCH_ID}" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "X-Signature: ${X_SIGNATURE}" \
+  -H "Accept: application/json")
+
+BATCH_BODY=$(echo "$BATCH_HTTP" | sed '$d')
+BATCH_QUERY_CODE=$(echo "$BATCH_HTTP" | tail -n 1)
+
+echo "HTTP $BATCH_QUERY_CODE"
+fail_if_not_json "Bulk batch query" "$BATCH_BODY"
+echo "$BATCH_BODY" | python3 -m json.tool

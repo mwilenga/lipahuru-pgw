@@ -103,6 +103,11 @@ class Merchant extends Authenticatable
         return $this->hasMany(WalletTransfer::class);
     }
 
+    public function disbursementBatches(): HasMany
+    {
+        return $this->hasMany(DisbursementBatch::class);
+    }
+
     public function idempotencyRecords(): HasMany
     {
         return $this->hasMany(IdempotencyRecord::class);

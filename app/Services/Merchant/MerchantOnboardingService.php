@@ -72,38 +72,12 @@ class MerchantOnboardingService
 
     private function provisionWalletHierarchy(Merchant $merchant): void
     {
-        $currency = $merchant->default_currency;
-
-        $parentWallet = $this->createWalletWithBalance($merchant->id, [
-            'wallet_type' => WalletType::MerchantParent,
-            'currency' => $currency,
-            'name' => "{$merchant->name} Parent Wallet",
+        $this->createWalletWithBalance($merchant->id, [
+            'wallet_type' => WalletType::MerchantBalance,
+            'currency' => $merchant->default_currency,
+            'name' => "{$merchant->name} Balance",
             'is_active' => true,
         ]);
-
-        $networks = ProviderNetwork::query()->where('is_active', true)->get();
-
-        foreach ($networks as $network) {
-            $providerTotal = $this->createWalletWithBalance($merchant->id, [
-                'parent_wallet_id' => $parentWallet->id,
-                'provider_network_id' => $network->id,
-                'wallet_type' => WalletType::ProviderTotal,
-                'currency' => $currency,
-                'name' => "{$network->name} Total",
-                'is_active' => true,
-            ]);
-
-            foreach ([WalletType::CollectionLeaf, WalletType::DisbursementLeaf] as $walletType) {
-                $this->createWalletWithBalance($merchant->id, [
-                    'parent_wallet_id' => $providerTotal->id,
-                    'provider_network_id' => $network->id,
-                    'wallet_type' => $walletType,
-                    'currency' => $currency,
-                    'name' => "{$network->name} ".str_replace('_', ' ', $walletType->value),
-                    'is_active' => true,
-                ]);
-            }
-        }
     }
 
     private function provisionProviderProfiles(Merchant $merchant): void

@@ -17,4 +17,5 @@ return [
     'credential_rotation_grace_hours' => 24,
     /** Calendar-day filters (from/to) are interpreted in this timezone. */
     'filter_timezone' => env('GATEWAY_FILTER_TIMEZONE', 'Africa/Dar_es_Salaam'),
+    'bulk_disbursement_max_items' => (int) env('GATEWAY_BULK_DISBURSEMENT_MAX_ITEMS', 500),
 ];

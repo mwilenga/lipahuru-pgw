@@ -20,6 +20,7 @@ class MerchantWebhookService
             return null;
         }
 
+        $transaction->loadMissing('disbursementBatch');
         $payload = $this->buildPaymentFinalizedPayload($transaction);
 
         $delivery = WebhookDelivery::query()->create([
@@ -149,6 +150,7 @@ class MerchantWebhookService
         return [
             'event' => 'PAYMENT_FINALIZED',
             'transactionId' => $transaction->transaction_id,
+            'batchId' => $transaction->disbursementBatch?->batch_id,
             'requestId' => $transaction->request_id,
             'reference' => $transaction->reference,
             'status' => $transaction->status->value,

@@ -22,6 +22,16 @@ class EloquentWalletRepository implements WalletRepositoryInterface
             ->first();
     }
 
+    public function findMerchantBalance(int $merchantId): ?Wallet
+    {
+        return Wallet::query()
+            ->where('merchant_id', $merchantId)
+            ->where('wallet_type', WalletType::MerchantBalance)
+            ->where('is_active', true)
+            ->with('balance')
+            ->first();
+    }
+
     public function findWithBalanceForUpdate(int $walletId): ?Wallet
     {
         return Wallet::query()

@@ -52,7 +52,8 @@ class AdminPortalService
             ->count();
 
         $parentWallets = Wallet::query()
-            ->where('wallet_type', WalletType::MerchantParent)
+            ->where('wallet_type', WalletType::MerchantBalance)
+            ->where('is_active', true)
             ->with('balance')
             ->get();
 
@@ -65,33 +66,6 @@ class AdminPortalService
             $parentReserved = bcadd($parentReserved, (string) ($wallet->balance?->reserved ?? '0'), 4);
             $parentTotal = bcadd($parentTotal, (string) ($wallet->balance?->total ?? '0'), 4);
         }
-
-        $providerTotals = Wallet::query()
-            ->where('wallet_type', WalletType::ProviderTotal)
-            ->with(['balance', 'providerNetwork'])
-            ->get()
-            ->groupBy('provider_network_id')
-            ->map(function ($wallets) {
-                /** @var \Illuminate\Support\Collection<int, Wallet> $wallets */
-                $first = $wallets->first();
-                $available = '0.0000';
-                $total = '0.0000';
-
-                foreach ($wallets as $wallet) {
-                    $available = bcadd($available, (string) ($wallet->balance?->available ?? '0'), 4);
-                    $total = bcadd($total, (string) ($wallet->balance?->total ?? '0'), 4);
-                }
-
-                return [
-                    'providerCode' => $first?->providerNetwork?->code?->value,
-                    'name' => $first?->providerNetwork?->name ?? $first?->name ?? 'Provider',
-                    'available' => $available,
-                    'total' => $total,
-                    'currency' => $first?->currency ?? 'TZS',
-                ];
-            })
-            ->values()
-            ->all();
 
         $recent = $this->transactionHistoryService->listAll(['perPage' => 8]);
 
@@ -108,7 +82,7 @@ class AdminPortalService
                 'total' => $parentTotal,
                 'currency' => $currency,
             ],
-            'providerWallets' => $providerTotals,
+            'providerWallets' => [],
             'recentTransactions' => TransactionResource::collection($recent->items())->resolve(),
             'currency' => $currency,
         ];

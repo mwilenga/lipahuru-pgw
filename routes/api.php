@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\V1\AdminAuthController;
-use App\Http\Controllers\Admin\V1\AdminFloatTopupController;
+use App\Http\Controllers\Admin\V1\AdminBalanceCreditController;
 use App\Http\Controllers\Admin\V1\AdminMerchantCommissionController;
 use App\Http\Controllers\Admin\V1\AdminMerchantController;
 use App\Http\Controllers\Admin\V1\AdminMonitoringController;
@@ -10,7 +10,7 @@ use App\Http\Controllers\Admin\V1\AdminProviderController;
 use App\Http\Controllers\Admin\V1\AdminReportController;
 use App\Http\Controllers\Admin\V1\AdminSettlementController;
 use App\Http\Controllers\Admin\V1\AdminTransactionController;
-use App\Http\Controllers\Admin\V1\AdminWalletTransferController;
+use App\Http\Controllers\Api\V1\BulkDisbursementController;
 use App\Http\Controllers\Api\V1\CollectionController;
 use App\Http\Controllers\Api\V1\DisbursementController;
 use App\Http\Controllers\Api\V1\MerchantAuthController;
@@ -18,9 +18,7 @@ use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WebhookController;
-use App\Http\Controllers\Portal\MerchantFloatTopupController;
 use App\Http\Controllers\Portal\MerchantPortalController;
-use App\Http\Controllers\Portal\MerchantWalletTransferController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/admin/v1/login', [AdminAuthController::class, 'login']);
@@ -40,6 +38,7 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('/transactions', [TransactionController::class, 'index']);
         Route::get('/payments/{transactionId}', [TransactionController::class, 'show']);
+        Route::get('/payments/disbursements/bulk/{batchId}', [BulkDisbursementController::class, 'show']);
 
         Route::get('/webhooks', [WebhookController::class, 'index']);
         Route::post('/webhooks', [WebhookController::class, 'store']);
@@ -49,6 +48,8 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/payments/collections/push', [CollectionController::class, 'push'])
                 ->middleware('gateway.headers:true');
             Route::post('/payments/disbursements', [DisbursementController::class, 'store'])
+                ->middleware('gateway.headers:true');
+            Route::post('/payments/disbursements/bulk', [BulkDisbursementController::class, 'store'])
                 ->middleware('gateway.headers:true');
             Route::post('/payments/{transactionId}/refunds', [RefundController::class, 'store'])
                 ->middleware('gateway.headers:true');
@@ -63,11 +64,6 @@ Route::prefix('v1/portal')
         Route::get('/dashboard', [MerchantPortalController::class, 'dashboard']);
         Route::get('/wallets', [MerchantPortalController::class, 'wallets']);
         Route::get('/transactions', [MerchantPortalController::class, 'transactions']);
-        Route::get('/float-topups', [MerchantFloatTopupController::class, 'index']);
-        Route::post('/float-topups', [MerchantFloatTopupController::class, 'store']);
-        Route::get('/wallet-transfers', [MerchantWalletTransferController::class, 'index']);
-        Route::get('/wallet-transfers/transferable-wallets', [MerchantWalletTransferController::class, 'transferableWallets']);
-        Route::post('/wallet-transfers', [MerchantWalletTransferController::class, 'store']);
     });
 
 Route::prefix('admin/v1')
@@ -89,16 +85,8 @@ Route::prefix('admin/v1')
         Route::get('/networks', [AdminProviderController::class, 'networks']);
         Route::get('/routes', [AdminProviderController::class, 'routes']);
 
-        Route::get('/float-topups', [AdminFloatTopupController::class, 'index']);
-        Route::post('/float-topups', [AdminFloatTopupController::class, 'store']);
-        Route::post('/float-topups/{id}/approve', [AdminFloatTopupController::class, 'approve']);
-        Route::post('/float-topups/{id}/reject', [AdminFloatTopupController::class, 'reject']);
-
-        Route::get('/wallet-transfers', [AdminWalletTransferController::class, 'index']);
-        Route::get('/wallet-transfers/transferable-wallets/{merchantId}', [AdminWalletTransferController::class, 'transferableWallets']);
-        Route::post('/wallet-transfers', [AdminWalletTransferController::class, 'store']);
-        Route::post('/wallet-transfers/{id}/approve', [AdminWalletTransferController::class, 'approve']);
-        Route::post('/wallet-transfers/{id}/reject', [AdminWalletTransferController::class, 'reject']);
+        Route::get('/balance-credits', [AdminBalanceCreditController::class, 'index']);
+        Route::post('/balance-credits', [AdminBalanceCreditController::class, 'store']);
 
         Route::get('/webhook-logs', [AdminMonitoringController::class, 'webhookLogs']);
         Route::get('/audit-logs', [AdminMonitoringController::class, 'auditLogs']);

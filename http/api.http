@@ -56,6 +56,7 @@ Accept: application/json
 
 ###############################################################################
 # 3. LIPAHURU — B2C disbursement (merchant → Lipahuru)
+# Debits the single merchant balance. providerCode selects the payment channel only.
 ###############################################################################
 
 POST {{lipahuruHost}}/api/v1/payments/disbursements
@@ -75,6 +76,52 @@ Accept: application/json
   "callbackUrl": "https://merchant.example.com/api/payment-result",
   "narration": "Customer refund"
 }
+
+###############################################################################
+# 3b. LIPAHURU — Bulk B2C disbursement (merchant → Lipahuru)
+# All items reserve from the same merchant balance; per-item providerCode is the channel.
+###############################################################################
+
+POST {{lipahuruHost}}/api/v1/payments/disbursements/bulk
+Authorization: Bearer {{accessToken}}
+X-Signature: {{signature}}
+X-Idempotency-Key: {{idempotencyKey}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "requestId": "8f4e2a1b-3c5d-4e6f-9a0b-1c2d3e4f5a6b",
+  "batchReference": "PAYROLL-MAR-2026",
+  "currency": "TZS",
+  "callbackUrl": "https://merchant.example.com/api/payment-result",
+  "items": [
+    {
+      "requestId": "1a2b3c4d-5e6f-7890-abcd-ef1234567890",
+      "providerCode": "VODACOM",
+      "reference": "PAYOUT-1001",
+      "msisdn": "255713123456",
+      "amount": 25000.00,
+      "narration": "Salary March"
+    },
+    {
+      "requestId": "2b3c4d5e-6f70-8901-bcde-f12345678901",
+      "providerCode": "YAS",
+      "reference": "PAYOUT-1002",
+      "msisdn": "255754123456",
+      "amount": 18000.00,
+      "narration": "Salary March"
+    }
+  ]
+}
+
+###############################################################################
+# 3c. LIPAHURU — Query bulk disbursement batch
+###############################################################################
+
+GET {{lipahuruHost}}/api/v1/payments/disbursements/bulk/BATCH-PASTE_BATCH_ID_HERE
+Authorization: Bearer {{accessToken}}
+X-Signature: {{signature}}
+Accept: application/json
 
 ###############################################################################
 # 4. LIPAHURU — Query transaction status

@@ -9,7 +9,7 @@ class SyncParentWalletBalancesCommand extends Command
 {
     protected $signature = 'wallet:sync-parent-balances {merchantId? : Optional merchant id to scope the sync}';
 
-    protected $description = 'Reconcile merchant parent wallet balances from provider total child wallets';
+    protected $description = 'No-op: parent wallet hierarchy collapsed to MERCHANT_BALANCE';
 
     public function handle(WalletLedgerService $walletLedgerService): int
     {

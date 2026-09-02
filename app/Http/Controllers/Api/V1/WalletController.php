@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\GatewayErrorCode;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WalletResource;
 use App\Models\Merchant;
@@ -30,13 +31,10 @@ class WalletController extends Controller
 
     public function show(Request $request, string $providerCode): JsonResponse
     {
-        /** @var Merchant $merchant */
-        $merchant = $request->attributes->get('merchant');
-
-        $wallet = $this->walletQueryService->getByProviderCode($merchant, $providerCode);
-
-        return ApiResponse::success(
-            new WalletResource($wallet),
+        return ApiResponse::failed(
+            GatewayErrorCode::GeneralError,
+            'Provider-specific wallets are retired. Use GET /api/v1/wallets for the single merchant balance. providerCode selects the payment channel on collection/disbursement only.',
+            httpStatus: 410,
         );
     }
 }

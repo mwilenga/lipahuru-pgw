@@ -6,7 +6,6 @@ use App\Enums\GatewayErrorCode;
 use App\Enums\MerchantStatus;
 use App\Enums\PaymentOperation;
 use App\Enums\TransactionStatus;
-use App\Enums\WalletType;
 use App\Exceptions\GatewayException;
 use App\Models\Merchant;
 use App\Models\ProviderNetwork;
@@ -138,107 +137,169 @@ class PaymentService
                 throw new GatewayException(GatewayErrorCode::DuplicateRequest, httpStatus: 409);
             }
 
-            $disbursementWallet = $this->walletRepository->findByMerchantAndType(
-                $merchant->id,
-                WalletType::DisbursementLeaf,
-                $providerNetwork->id,
+            $transaction = $this->prepareDisbursement($merchant, $payload, $providerNetwork);
+
+            return $this->dispatchDisbursement($transaction, $payload['providerCode'], $providerNetwork);
+        });
+    }
+
+    /**
+     * Create a disbursement transaction and reserve funds. Caller must run inside a DB transaction.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function prepareDisbursement(
+        Merchant $merchant,
+        array $payload,
+        ProviderNetwork $providerNetwork,
+        ?int $batchId = null,
+    ): Transaction {
+        $merchantWallet = $this->walletRepository->findMerchantBalance($merchant->id);
+
+        if ($merchantWallet === null) {
+            throw new GatewayException(GatewayErrorCode::GeneralError, 'Merchant balance wallet not provisioned', httpStatus: 422);
+        }
+
+        $transaction = $this->transactionRepository->create([
+            'transaction_id' => $this->generateTransactionId(),
+            'merchant_id' => $merchant->id,
+            'provider_network_id' => $providerNetwork->id,
+            'disbursement_batch_id' => $batchId,
+            'request_id' => $payload['requestId'],
+            'reference' => $payload['reference'],
+            'external_reference' => $payload['externalReference'] ?? null,
+            'operation' => PaymentOperation::B2cDisbursement,
+            'status' => TransactionStatus::Received,
+            'amount' => $payload['amount'],
+            'currency' => $payload['currency'] ?? $merchant->default_currency,
+            'msisdn' => $payload['msisdn'],
+            'callback_url' => $payload['callbackUrl'] ?? $merchant->default_callback_url,
+            'narration' => $payload['narration'] ?? null,
+            'metadata' => $payload['metadata'] ?? null,
+        ]);
+
+        $transaction = $this->stateMachine->transition($transaction, TransactionStatus::Authenticated, 'AUTHENTICATED', actor: 'gateway');
+        $transaction = $this->stateMachine->transition($transaction, TransactionStatus::Validated, 'VALIDATED', actor: 'gateway');
+
+        $this->walletLedgerService->reserveFunds($merchantWallet, $transaction, (string) $transaction->amount);
+
+        return $this->stateMachine->transition($transaction, TransactionStatus::FundsReserved, 'FUNDS_RESERVED', actor: 'gateway');
+    }
+
+    public function dispatchDisbursement(
+        Transaction $transaction,
+        string $providerCode,
+        ?ProviderNetwork $providerNetwork = null,
+    ): Transaction {
+        $providerNetwork ??= $transaction->providerNetwork;
+
+        if ($providerNetwork === null) {
+            throw new GatewayException(GatewayErrorCode::GeneralError, 'Provider network not found', httpStatus: 422);
+        }
+
+        $provider = $this->providerRouter->resolve($providerCode, PaymentOperation::B2cDisbursement);
+
+        try {
+            $response = $provider->initiateDisbursement(new DisbursementRequest(
+                transactionId: $transaction->transaction_id,
+                reference: $transaction->reference,
+                amount: (string) $transaction->amount,
+                currency: $transaction->currency,
+                msisdn: $transaction->msisdn,
+                providerCode: $providerCode,
+                narration: $transaction->narration,
+                callbackUrl: $transaction->callback_url,
+                metadata: $transaction->metadata ?? [],
+            ));
+        } catch (\Throwable $exception) {
+            $this->walletLedgerService->releaseFunds($transaction);
+            $this->stateMachine->transition(
+                $transaction->refresh(),
+                TransactionStatus::Failed,
+                'PROVIDER_SUBMISSION_FAILED',
+                payload: ['message' => $exception->getMessage()],
+                actor: 'gateway',
+                attributes: [
+                    'failure_code' => GatewayErrorCode::GeneralError->value,
+                    'failure_message' => $exception->getMessage(),
+                ],
             );
 
-            if ($disbursementWallet === null) {
-                throw new GatewayException(GatewayErrorCode::GeneralError, 'Disbursement wallet not provisioned', httpStatus: 422);
-            }
+            throw $exception instanceof GatewayException
+                ? $exception
+                : new GatewayException(GatewayErrorCode::GeneralError, $exception->getMessage(), httpStatus: 502);
+        }
 
-            $transaction = $this->transactionRepository->create([
-                'transaction_id' => $this->generateTransactionId(),
-                'merchant_id' => $merchant->id,
-                'provider_network_id' => $providerNetwork->id,
-                'request_id' => $payload['requestId'],
-                'reference' => $payload['reference'],
-                'external_reference' => $payload['externalReference'] ?? null,
-                'operation' => PaymentOperation::B2cDisbursement,
-                'status' => TransactionStatus::Received,
-                'amount' => $payload['amount'],
-                'currency' => $payload['currency'] ?? $merchant->default_currency,
-                'msisdn' => $payload['msisdn'],
-                'callback_url' => $payload['callbackUrl'] ?? $merchant->default_callback_url,
-                'narration' => $payload['narration'] ?? null,
-                'metadata' => $payload['metadata'] ?? null,
-            ]);
-
-            $transaction = $this->stateMachine->transition($transaction, TransactionStatus::Authenticated, 'AUTHENTICATED', actor: 'gateway');
-            $transaction = $this->stateMachine->transition($transaction, TransactionStatus::Validated, 'VALIDATED', actor: 'gateway');
-
-            $this->walletLedgerService->reserveFunds($disbursementWallet, $transaction, (string) $transaction->amount);
-
-            $transaction = $this->stateMachine->transition($transaction, TransactionStatus::FundsReserved, 'FUNDS_RESERVED', actor: 'gateway');
-
-            $provider = $this->providerRouter->resolve($payload['providerCode'], PaymentOperation::B2cDisbursement);
-
-            try {
-                $response = $provider->initiateDisbursement(new DisbursementRequest(
-                    transactionId: $transaction->transaction_id,
-                    reference: $transaction->reference,
-                    amount: (string) $transaction->amount,
-                    currency: $transaction->currency,
-                    msisdn: $transaction->msisdn,
-                    providerCode: $payload['providerCode'],
-                    narration: $transaction->narration,
-                    callbackUrl: $transaction->callback_url,
-                    metadata: $transaction->metadata ?? [],
-                ));
-            } catch (\Throwable $exception) {
-                $this->walletLedgerService->releaseFunds($transaction);
-                $this->stateMachine->transition(
-                    $transaction->refresh(),
-                    TransactionStatus::Failed,
-                    'PROVIDER_SUBMISSION_FAILED',
-                    payload: ['message' => $exception->getMessage()],
-                    actor: 'gateway',
-                    attributes: [
-                        'failure_code' => GatewayErrorCode::GeneralError->value,
-                        'failure_message' => $exception->getMessage(),
-                    ],
-                );
-
-                throw $exception instanceof GatewayException
-                    ? $exception
-                    : new GatewayException(GatewayErrorCode::GeneralError, $exception->getMessage(), httpStatus: 502);
-            }
-
-            if (! $response->success) {
-                $this->walletLedgerService->releaseFunds($transaction);
-
-                return $this->stateMachine->transition(
-                    $transaction->refresh(),
-                    TransactionStatus::Failed,
-                    'PROVIDER_REJECTED',
-                    payload: $response->rawResponse,
-                    actor: $provider->getDriverName(),
-                    attributes: [
-                        'failure_code' => $response->failureCode,
-                        'failure_message' => $response->failureMessage,
-                    ],
-                );
-            }
-
-            $transaction->update([
-                'payment_provider_id' => $providerNetwork->routes()->first()?->payment_provider_id,
-                'provider_transaction_id' => $response->providerTransactionId,
-                'provider_receipt_no' => $response->providerReceiptNo,
-            ]);
-
-            $nextStatus = $response->status === TransactionStatus::PendingFinal
-                ? TransactionStatus::PendingFinal
-                : TransactionStatus::Acknowledged;
+        if (! $response->success) {
+            $this->walletLedgerService->releaseFunds($transaction);
 
             return $this->stateMachine->transition(
                 $transaction->refresh(),
-                $nextStatus,
-                'PROVIDER_ACKNOWLEDGED',
+                TransactionStatus::Failed,
+                'PROVIDER_REJECTED',
                 payload: $response->rawResponse,
                 actor: $provider->getDriverName(),
+                attributes: [
+                    'failure_code' => $response->failureCode,
+                    'failure_message' => $response->failureMessage,
+                ],
             );
-        });
+        }
+
+        $transaction->update([
+            'payment_provider_id' => $providerNetwork->routes()->first()?->payment_provider_id,
+            'provider_transaction_id' => $response->providerTransactionId,
+            'provider_receipt_no' => $response->providerReceiptNo,
+        ]);
+
+        $nextStatus = $response->status === TransactionStatus::PendingFinal
+            ? TransactionStatus::PendingFinal
+            : TransactionStatus::Acknowledged;
+
+        return $this->stateMachine->transition(
+            $transaction->refresh(),
+            $nextStatus,
+            'PROVIDER_ACKNOWLEDGED',
+            payload: $response->rawResponse,
+            actor: $provider->getDriverName(),
+        );
+    }
+
+    public function assertMerchantCanTransact(Merchant $merchant): void
+    {
+        if ($merchant->status !== MerchantStatus::Active) {
+            throw new GatewayException(GatewayErrorCode::AuthenticationFailed, 'Merchant is not active', httpStatus: 403);
+        }
+    }
+
+    public function resolveProviderNetwork(string $providerCode): ProviderNetwork
+    {
+        $network = ProviderNetwork::query()
+            ->where('code', $providerCode)
+            ->where('is_active', true)
+            ->first();
+
+        if ($network === null) {
+            throw new GatewayException(GatewayErrorCode::UnsupportedProvider);
+        }
+
+        return $network;
+    }
+
+    public function assertMerchantProfile(Merchant $merchant, ProviderNetwork $network, string $amount): void
+    {
+        $profile = $merchant->providerProfiles()
+            ->where('provider_network_id', $network->id)
+            ->where('is_enabled', true)
+            ->first();
+
+        if ($profile === null) {
+            throw new GatewayException(GatewayErrorCode::UnsupportedProvider, 'Provider not enabled for merchant');
+        }
+
+        if (bccomp($amount, (string) $profile->min_amount, 4) < 0 || bccomp($amount, (string) $profile->max_amount, 4) > 0) {
+            throw new GatewayException(GatewayErrorCode::AmountLimitExceeded);
+        }
     }
 
     public function finalizeSuccess(Transaction $transaction): Transaction
@@ -265,16 +326,12 @@ class PaymentService
             $this->walletLedgerService->consumeFunds($transaction);
         }
 
-        if ($transaction->operation === PaymentOperation::C2bPush && $transaction->provider_network_id !== null) {
-            $collectionWallet = $this->walletRepository->findByMerchantAndType(
-                $transaction->merchant_id,
-                WalletType::CollectionLeaf,
-                $transaction->provider_network_id,
-            );
+        if ($transaction->operation === PaymentOperation::C2bPush) {
+            $merchantWallet = $this->walletRepository->findMerchantBalance($transaction->merchant_id);
 
-            if ($collectionWallet !== null && ! $this->walletLedgerService->hasCollectionCredit($transaction)) {
+            if ($merchantWallet !== null && ! $this->walletLedgerService->hasCollectionCredit($transaction)) {
                 $this->walletLedgerService->creditCollectionWallet(
-                    $collectionWallet,
+                    $merchantWallet,
                     $transaction,
                     (string) $transaction->amount,
                 );
@@ -300,43 +357,6 @@ class PaymentService
                 'failure_message' => $failureMessage,
             ]),
         );
-    }
-
-    private function assertMerchantCanTransact(Merchant $merchant): void
-    {
-        if ($merchant->status !== MerchantStatus::Active) {
-            throw new GatewayException(GatewayErrorCode::AuthenticationFailed, 'Merchant is not active', httpStatus: 403);
-        }
-    }
-
-    private function resolveProviderNetwork(string $providerCode): ProviderNetwork
-    {
-        $network = ProviderNetwork::query()
-            ->where('code', $providerCode)
-            ->where('is_active', true)
-            ->first();
-
-        if ($network === null) {
-            throw new GatewayException(GatewayErrorCode::UnsupportedProvider);
-        }
-
-        return $network;
-    }
-
-    private function assertMerchantProfile(Merchant $merchant, ProviderNetwork $network, string $amount): void
-    {
-        $profile = $merchant->providerProfiles()
-            ->where('provider_network_id', $network->id)
-            ->where('is_enabled', true)
-            ->first();
-
-        if ($profile === null) {
-            throw new GatewayException(GatewayErrorCode::UnsupportedProvider, 'Provider not enabled for merchant');
-        }
-
-        if (bccomp($amount, (string) $profile->min_amount, 4) < 0 || bccomp($amount, (string) $profile->max_amount, 4) > 0) {
-            throw new GatewayException(GatewayErrorCode::AmountLimitExceeded);
-        }
     }
 
     private function generateTransactionId(): string

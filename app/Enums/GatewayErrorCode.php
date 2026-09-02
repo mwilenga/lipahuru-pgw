@@ -26,7 +26,7 @@ enum GatewayErrorCode: string
             self::InvalidMsisdn => 'Invalid MSISDN format',
             self::DuplicateRequest => 'Duplicate requestId or idempotency conflict',
             self::AmountLimitExceeded => 'Amount exceeds configured merchant limits',
-            self::InsufficientBalance => 'Insufficient available balance in disbursement wallet',
+            self::InsufficientBalance => 'Insufficient available balance',
             self::AuthenticationFailed => 'Authentication failed',
             self::SignatureFailed => 'Signature validation failed',
             self::ReplayProtectionFailed => 'Replay protection failed due to nonce or timestamp validation',
