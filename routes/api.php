@@ -19,9 +19,11 @@ use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WebhookController;
 use App\Http\Controllers\Portal\MerchantPortalController;
+use App\Http\Controllers\Portal\PortalAuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/admin/v1/login', [AdminAuthController::class, 'login']);
+Route::post('/v1/portal/login', [PortalAuthController::class, 'login']);
 
 Route::prefix('v1')->group(function (): void {
     Route::post('/merchant/register', [MerchantAuthController::class, 'register']);
