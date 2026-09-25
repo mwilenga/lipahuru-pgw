@@ -19,6 +19,7 @@ class AdminApprovalSmsTest extends GatewayTestCase
         $this->seed(GatewaySeeder::class);
 
         config([
+            'app.frontend_url' => 'https://portal.lipahuru.test',
             'services.kilakona_sms.api_key' => 'test-api-key',
             'services.kilakona_sms.api_secret' => 'test-api-secret',
             'services.kilakona_sms.send_url' => 'https://messaging.kilakona.test/api/v1/vendor/message/send',
@@ -46,8 +47,12 @@ class AdminApprovalSmsTest extends GatewayTestCase
             ->assertJsonPath('data.status', 'PENDING');
 
         $topupId = (string) $response->json('data.topupId');
+        $numericId = (string) $response->json('data.id');
+        $approveUrl = 'https://portal.lipahuru.test/login?next='.rawurlencode(
+            '/admin/float-topups?approve='.$numericId,
+        );
 
-        Http::assertSent(function ($request) use ($merchant, $topupId) {
+        Http::assertSent(function ($request) use ($merchant, $topupId, $approveUrl) {
             if ($request->url() !== 'https://messaging.kilakona.test/api/v1/vendor/message/send') {
                 return false;
             }
@@ -62,7 +67,8 @@ class AdminApprovalSmsTest extends GatewayTestCase
                 && str_contains((string) ($body['message'] ?? ''), 'Float topup pending')
                 && str_contains((string) ($body['message'] ?? ''), $merchant->name)
                 && str_contains((string) ($body['message'] ?? ''), $topupId)
-                && str_contains((string) ($body['message'] ?? ''), '5000');
+                && str_contains((string) ($body['message'] ?? ''), '5000')
+                && str_contains((string) ($body['message'] ?? ''), $approveUrl);
         });
     }
 
@@ -87,8 +93,12 @@ class AdminApprovalSmsTest extends GatewayTestCase
             ->assertJsonPath('data.status', 'PENDING_APPROVAL');
 
         $transferId = (string) $response->json('data.transferId');
+        $numericId = (string) $response->json('data.id');
+        $approveUrl = 'https://portal.lipahuru.test/login?next='.rawurlencode(
+            '/admin/transfers?approve='.$numericId,
+        );
 
-        Http::assertSent(function ($request) use ($merchant, $transferId) {
+        Http::assertSent(function ($request) use ($merchant, $transferId, $approveUrl) {
             $body = $request->data();
 
             return $request->url() === 'https://messaging.kilakona.test/api/v1/vendor/message/send'
@@ -96,7 +106,8 @@ class AdminApprovalSmsTest extends GatewayTestCase
                 && str_contains((string) ($body['message'] ?? ''), 'Fund transfer pending')
                 && str_contains((string) ($body['message'] ?? ''), $merchant->name)
                 && str_contains((string) ($body['message'] ?? ''), $transferId)
-                && str_contains((string) ($body['message'] ?? ''), '2500');
+                && str_contains((string) ($body['message'] ?? ''), '2500')
+                && str_contains((string) ($body['message'] ?? ''), $approveUrl);
         });
     }
 
