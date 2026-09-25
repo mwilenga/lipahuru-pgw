@@ -54,7 +54,7 @@ class AuthenticationTest extends GatewayTestCase
 
     public function test_portal_login_routes_admin_by_email(): void
     {
-        $response = $this->postJson('/api/v1/portal/login', [
+        $response = $this->postJson('/api/v1/login', [
             'email' => 'admin@lipahuru.test',
             'password' => 'password',
         ]);
@@ -78,7 +78,7 @@ class AuthenticationTest extends GatewayTestCase
             'email_verified_at' => now(),
         ]);
 
-        $response = $this->postJson('/api/v1/portal/login', [
+        $response = $this->postJson('/api/v1/login', [
             'email' => 'owner@merchant.test',
             'password' => 'password',
         ]);
@@ -91,7 +91,7 @@ class AuthenticationTest extends GatewayTestCase
 
     public function test_portal_login_rejects_invalid_credentials(): void
     {
-        $response = $this->postJson('/api/v1/portal/login', [
+        $response = $this->postJson('/api/v1/login', [
             'email' => 'nobody@example.com',
             'password' => 'wrong',
         ]);
