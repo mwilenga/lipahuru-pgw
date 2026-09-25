@@ -20,13 +20,18 @@ class KilakonaSmsClient
         $recipients = $contacts ?? ($config['recipients'] ?? []);
 
         if ($apiKey === '' || $apiSecret === '' || $sendUrl === '' || $senderId === '') {
-            Log::warning('Kilakona SMS skipped: incomplete configuration.');
+            Log::warning('Kilakona SMS skipped: incomplete configuration.', [
+                'has_api_key' => $apiKey !== '',
+                'has_api_secret' => $apiSecret !== '',
+                'has_send_url' => $sendUrl !== '',
+                'has_sender_id' => $senderId !== '',
+            ]);
 
             return;
         }
 
         if ($recipients === []) {
-            Log::warning('Kilakona SMS skipped: no recipients configured.');
+            Log::warning('Kilakona SMS skipped: no recipients configured (ADMIN_SMS_RECIPIENTS).');
 
             return;
         }
@@ -61,11 +66,21 @@ class KilakonaSmsClient
                 Log::warning('Kilakona SMS send failed.', [
                     'status' => $response->status(),
                     'body' => $response->body(),
+                    'contacts' => $contactsCsv,
                 ]);
+
+                return;
             }
+
+            Log::info('Kilakona SMS sent.', [
+                'contacts' => $contactsCsv,
+                'message_preview' => mb_substr($message, 0, 80),
+                'response' => $response->json(),
+            ]);
         } catch (\Throwable $exception) {
             Log::warning('Kilakona SMS send exception.', [
                 'message' => $exception->getMessage(),
+                'contacts' => $contactsCsv,
             ]);
         }
     }
