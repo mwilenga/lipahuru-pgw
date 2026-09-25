@@ -14,6 +14,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\ProviderNetwork;
 use App\Models\Wallet;
+use App\Services\Sms\AdminApprovalSmsNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -22,6 +23,7 @@ class FloatTopupService
 {
     public function __construct(
         private readonly WalletLedgerService $walletLedgerService,
+        private readonly AdminApprovalSmsNotifier $adminApprovalSmsNotifier,
     ) {}
 
     /**
@@ -34,7 +36,7 @@ class FloatTopupService
         ?string $reference = null,
         ?string $notes = null,
     ): FloatTopup {
-        return $this->createTopup(
+        $topup = $this->createTopup(
             merchant: $merchant,
             items: $items,
             source: FloatTopupSource::Merchant,
@@ -45,6 +47,12 @@ class FloatTopupService
             notes: $notes,
             creditImmediately: false,
         );
+
+        DB::afterCommit(function () use ($topup): void {
+            $this->adminApprovalSmsNotifier->notifyFloatTopup($topup);
+        });
+
+        return $topup;
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\Wallet;
 use App\Models\WalletTransfer;
+use App\Services\Sms\AdminApprovalSmsNotifier;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class WalletTransferService
 
     public function __construct(
         private readonly WalletLedgerService $walletLedgerService,
+        private readonly AdminApprovalSmsNotifier $adminApprovalSmsNotifier,
     ) {}
 
     public function requestByMerchant(
@@ -36,7 +38,7 @@ class WalletTransferService
     ): WalletTransfer {
         [$from, $to, $normalizedAmount] = $this->resolve($merchant, $fromWalletId, $toWalletId, $amount);
 
-        return DB::transaction(function () use ($merchant, $user, $from, $to, $normalizedAmount, $reference, $notes): WalletTransfer {
+        $transfer = DB::transaction(function () use ($merchant, $user, $from, $to, $normalizedAmount, $reference, $notes): WalletTransfer {
             $transfer = WalletTransfer::query()->create([
                 'transfer_id' => $this->generateTransferId(),
                 'merchant_id' => $merchant->id,
@@ -61,6 +63,12 @@ class WalletTransferService
 
             return $transfer->fresh(['merchant', 'fromWallet.providerNetwork', 'toWallet.providerNetwork', 'reviewer']);
         });
+
+        DB::afterCommit(function () use ($transfer): void {
+            $this->adminApprovalSmsNotifier->notifyWalletTransfer($transfer);
+        });
+
+        return $transfer;
     }
 
     public function createDirectByAdmin(
