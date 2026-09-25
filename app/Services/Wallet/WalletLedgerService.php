@@ -489,6 +489,64 @@ class WalletLedgerService
     }
 
     /**
+     * Rebuild PROVIDER_TOTAL wallets from their leaf children, then MERCHANT_PARENT
+     * from provider totals. Used after restoring the multi-wallet hierarchy.
+     */
+    public function syncHierarchyBalances(?int $merchantId = null): int
+    {
+        $providerUpdated = $this->syncProviderTotalBalances($merchantId);
+        $parentUpdated = $this->syncParentWalletBalances($merchantId);
+
+        return $providerUpdated + $parentUpdated;
+    }
+
+    /**
+     * Rebuild each PROVIDER_TOTAL balance from the sum of its leaf children.
+     */
+    public function syncProviderTotalBalances(?int $merchantId = null): int
+    {
+        $query = Wallet::query()
+            ->where('wallet_type', WalletType::ProviderTotal)
+            ->with(['balance', 'childWallets.balance']);
+
+        if ($merchantId !== null) {
+            $query->where('merchant_id', $merchantId);
+        }
+
+        $updated = 0;
+
+        foreach ($query->get() as $providerWallet) {
+            if ($providerWallet->balance === null) {
+                continue;
+            }
+
+            $available = '0.0000';
+            $reserved = '0.0000';
+            $total = '0.0000';
+
+            foreach ($providerWallet->childWallets as $childWallet) {
+                if ($childWallet->balance === null) {
+                    continue;
+                }
+
+                $available = bcadd($available, (string) $childWallet->balance->available, 4);
+                $reserved = bcadd($reserved, (string) $childWallet->balance->reserved, 4);
+                $total = bcadd($total, (string) $childWallet->balance->total, 4);
+            }
+
+            $providerWallet->balance->update([
+                'available' => $available,
+                'reserved' => $reserved,
+                'total' => $total,
+            ]);
+
+            $updated++;
+        }
+
+        return $updated;
+    }
+
+    /**
      * Rebuild each ancestor of a leaf wallet from the sum of its children.
      * syncParentWalletBalances() only rebuilds MERCHANT_PARENT, so provider
      * totals need this when balances move directly between leaves.
