@@ -18,7 +18,7 @@ use App\Http\Controllers\Api\V1\RefundController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\WebhookController;
-use App\Http\Controllers\Portal\AuthController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Portal\MerchantFloatTopupController;
 use App\Http\Controllers\Portal\MerchantPortalController;
 use App\Http\Controllers\Portal\MerchantWalletTransferController;

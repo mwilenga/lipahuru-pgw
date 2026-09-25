@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\Portal;
+namespace App\Http\Controllers;
 
 use App\Enums\GatewayErrorCode;
 use App\Exceptions\GatewayException;
-use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
 use App\Models\MerchantUser;
 use App\Support\ApiResponse;
