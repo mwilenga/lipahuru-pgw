@@ -26,7 +26,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/admin/v1/login', [AdminAuthController::class, 'login']);
 Route::post('/v1/login', [AuthController::class, 'login']);
-Route::post('/v1/portal/login', [AuthController::class, 'login']); // alias
 
 Route::prefix('v1')->group(function (): void {
     Route::post('/merchant/register', [MerchantAuthController::class, 'register']);
