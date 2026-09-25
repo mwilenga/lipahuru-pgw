@@ -64,9 +64,14 @@ class WalletTransferService
             return $transfer->fresh(['merchant', 'fromWallet.providerNetwork', 'toWallet.providerNetwork', 'reviewer']);
         });
 
-        DB::afterCommit(function () use ($transfer): void {
+        try {
             $this->adminApprovalSmsNotifier->notifyWalletTransfer($transfer);
-        });
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Wallet transfer admin SMS failed.', [
+                'transfer_id' => $transfer->transfer_id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
 
         return $transfer;
     }

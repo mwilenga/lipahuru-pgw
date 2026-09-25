@@ -48,9 +48,16 @@ class FloatTopupService
             creditImmediately: false,
         );
 
-        DB::afterCommit(function () use ($topup): void {
+        // DB work is already committed by createTopup(); notify immediately.
+        // (DB::afterCommit after an ended transaction can miss in some runtime states.)
+        try {
             $this->adminApprovalSmsNotifier->notifyFloatTopup($topup);
-        });
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Float topup admin SMS failed.', [
+                'topup_id' => $topup->topup_id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
 
         return $topup;
     }
