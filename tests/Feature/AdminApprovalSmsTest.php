@@ -48,7 +48,9 @@ class AdminApprovalSmsTest extends GatewayTestCase
 
         $topupId = (string) $response->json('data.topupId');
         $numericId = (string) $response->json('data.id');
-        $approveUrl = "https://portal.lipahuru.test/admin/float-topups?approve={$numericId}";
+        $approveUrl = 'https://portal.lipahuru.test/login?next='.rawurlencode(
+            '/admin/float-topups?approve='.$numericId,
+        );
 
         Http::assertSent(function ($request) use ($merchant, $topupId, $approveUrl) {
             if ($request->url() !== 'https://messaging.kilakona.test/api/v1/vendor/message/send') {
@@ -92,7 +94,9 @@ class AdminApprovalSmsTest extends GatewayTestCase
 
         $transferId = (string) $response->json('data.transferId');
         $numericId = (string) $response->json('data.id');
-        $approveUrl = "https://portal.lipahuru.test/admin/transfers?approve={$numericId}";
+        $approveUrl = 'https://portal.lipahuru.test/login?next='.rawurlencode(
+            '/admin/transfers?approve='.$numericId,
+        );
 
         Http::assertSent(function ($request) use ($merchant, $transferId, $approveUrl) {
             $body = $request->data();

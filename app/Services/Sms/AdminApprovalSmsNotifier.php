@@ -18,7 +18,7 @@ class AdminApprovalSmsNotifier
         $merchantName = $topup->merchant?->name ?? 'Unknown merchant';
         $amount = $this->formatAmount((string) $topup->total_amount);
         $currency = $topup->currency ?? 'TZS';
-        $link = $this->portalLink('/admin/float-topups', ['approve' => (string) $topup->id]);
+        $link = $this->approvalLink('/admin/float-topups', (string) $topup->id);
 
         $message = "LipaHuru: Float topup pending from {$merchantName}. ID {$topup->topup_id}. Amount {$amount} {$currency}.";
         if ($link !== null) {
@@ -37,7 +37,7 @@ class AdminApprovalSmsNotifier
         $merchantName = $transfer->merchant?->name ?? 'Unknown merchant';
         $amount = $this->formatAmount((string) $transfer->amount);
         $currency = $transfer->currency ?? 'TZS';
-        $link = $this->portalLink('/admin/transfers', ['approve' => (string) $transfer->id]);
+        $link = $this->approvalLink('/admin/transfers', (string) $transfer->id);
 
         $message = "LipaHuru: Fund transfer pending from {$merchantName}. ID {$transfer->transfer_id}. Amount {$amount} {$currency}.";
         if ($link !== null) {
@@ -50,21 +50,18 @@ class AdminApprovalSmsNotifier
     }
 
     /**
-     * @param  array<string, string>  $query
+     * Route through /login?next=... so cold SMS opens never hit AuthGuard first.
      */
-    private function portalLink(string $path, array $query = []): ?string
+    private function approvalLink(string $path, string $approveId): ?string
     {
         $base = rtrim((string) config('app.frontend_url', env('FRONTEND_URL', '')), '/');
         if ($base === '') {
             return null;
         }
 
-        $url = $base.$path;
-        if ($query !== []) {
-            $url .= '?'.http_build_query($query);
-        }
+        $next = $path.'?approve='.rawurlencode($approveId);
 
-        return $url;
+        return $base.'/login?next='.rawurlencode($next);
     }
 
     private function formatAmount(string $amount): string
