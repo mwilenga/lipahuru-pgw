@@ -264,6 +264,179 @@ class WalletLedgerService
         });
     }
 
+    /**
+     * Hold funds on the source wallet while a transfer awaits approval.
+     */
+    public function holdTransferFunds(
+        Wallet $from,
+        string $amount,
+        string $currency,
+        string $reference,
+    ): void {
+        DB::transaction(function () use ($from, $amount, $currency, $reference): void {
+            $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($from->id);
+
+            if ($lockedWallet?->balance === null) {
+                throw new GatewayException(GatewayErrorCode::GeneralError, 'Wallet balance not found', httpStatus: 422);
+            }
+
+            $balance = $lockedWallet->balance;
+
+            if (bccomp((string) $balance->available, $amount, 4) < 0) {
+                throw new GatewayException(GatewayErrorCode::InsufficientBalance, httpStatus: 422);
+            }
+
+            $availableAfter = bcsub((string) $balance->available, $amount, 4);
+            $reservedAfter = bcadd((string) $balance->reserved, $amount, 4);
+
+            $balance->update([
+                'available' => $availableAfter,
+                'reserved' => $reservedAfter,
+            ]);
+
+            LedgerEntry::query()->create([
+                'wallet_id' => $lockedWallet->id,
+                'transaction_id' => null,
+                'entry_type' => 'TRANSFER_HOLD',
+                'amount' => $amount,
+                'currency' => $currency,
+                'balance_after' => $availableAfter,
+                'reference' => $reference,
+                'description' => 'Funds held for wallet transfer',
+                'created_at' => now(),
+            ]);
+
+            $this->recomputeAncestorBalances($lockedWallet);
+        });
+    }
+
+    /**
+     * Release a hold back to available funds (transfer rejected).
+     */
+    public function releaseTransferFunds(
+        Wallet $from,
+        string $amount,
+        string $currency,
+        string $reference,
+    ): void {
+        DB::transaction(function () use ($from, $amount, $currency, $reference): void {
+            $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($from->id);
+
+            if ($lockedWallet?->balance === null) {
+                throw new GatewayException(GatewayErrorCode::GeneralError, 'Wallet balance not found', httpStatus: 422);
+            }
+
+            $balance = $lockedWallet->balance;
+            $availableAfter = bcadd((string) $balance->available, $amount, 4);
+            $reservedAfter = bcsub((string) $balance->reserved, $amount, 4);
+
+            $balance->update([
+                'available' => $availableAfter,
+                'reserved' => $reservedAfter,
+            ]);
+
+            LedgerEntry::query()->create([
+                'wallet_id' => $lockedWallet->id,
+                'transaction_id' => null,
+                'entry_type' => 'TRANSFER_RELEASE',
+                'amount' => $amount,
+                'currency' => $currency,
+                'balance_after' => $availableAfter,
+                'reference' => $reference,
+                'description' => 'Wallet transfer hold released',
+                'created_at' => now(),
+            ]);
+
+            $this->recomputeAncestorBalances($lockedWallet);
+        });
+    }
+
+    /**
+     * Move held funds from the source wallet to the destination wallet.
+     */
+    public function settleTransfer(
+        Wallet $from,
+        Wallet $to,
+        string $amount,
+        string $currency,
+        string $reference,
+    ): void {
+        DB::transaction(function () use ($from, $to, $amount, $currency, $reference): void {
+            // Lock in a stable order so concurrent transfers cannot deadlock.
+            $ids = [$from->id, $to->id];
+            sort($ids);
+
+            $locked = [];
+
+            foreach ($ids as $walletId) {
+                $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($walletId);
+
+                if ($lockedWallet?->balance === null) {
+                    throw new GatewayException(GatewayErrorCode::GeneralError, 'Wallet balance not found', httpStatus: 422);
+                }
+
+                $locked[$walletId] = $lockedWallet;
+            }
+
+            $source = $locked[$from->id];
+            $destination = $locked[$to->id];
+
+            $sourceBalance = $source->balance;
+
+            if (bccomp((string) $sourceBalance->reserved, $amount, 4) < 0) {
+                throw new GatewayException(
+                    GatewayErrorCode::InsufficientBalance,
+                    'Held funds are no longer available for this transfer.',
+                    httpStatus: 422,
+                );
+            }
+
+            $sourceReservedAfter = bcsub((string) $sourceBalance->reserved, $amount, 4);
+            $sourceTotalAfter = bcsub((string) $sourceBalance->total, $amount, 4);
+
+            $sourceBalance->update([
+                'reserved' => $sourceReservedAfter,
+                'total' => $sourceTotalAfter,
+            ]);
+
+            LedgerEntry::query()->create([
+                'wallet_id' => $source->id,
+                'transaction_id' => null,
+                'entry_type' => 'TRANSFER_OUT',
+                'amount' => $amount,
+                'currency' => $currency,
+                'balance_after' => $sourceTotalAfter,
+                'reference' => $reference,
+                'description' => 'Wallet transfer debited',
+                'created_at' => now(),
+            ]);
+
+            $destinationBalance = $destination->balance;
+            $destinationAvailableAfter = bcadd((string) $destinationBalance->available, $amount, 4);
+            $destinationTotalAfter = bcadd((string) $destinationBalance->total, $amount, 4);
+
+            $destinationBalance->update([
+                'available' => $destinationAvailableAfter,
+                'total' => $destinationTotalAfter,
+            ]);
+
+            LedgerEntry::query()->create([
+                'wallet_id' => $destination->id,
+                'transaction_id' => null,
+                'entry_type' => 'TRANSFER_IN',
+                'amount' => $amount,
+                'currency' => $currency,
+                'balance_after' => $destinationTotalAfter,
+                'reference' => $reference,
+                'description' => 'Wallet transfer credited',
+                'created_at' => now(),
+            ]);
+
+            $this->recomputeAncestorBalances($source);
+            $this->recomputeAncestorBalances($destination);
+        });
+    }
+
     public function hasCollectionCredit(Transaction $transaction): bool
     {
         return LedgerEntry::query()
@@ -313,6 +486,111 @@ class WalletLedgerService
         }
 
         return $updated;
+    }
+
+    /**
+     * Rebuild PROVIDER_TOTAL wallets from their leaf children, then MERCHANT_PARENT
+     * from provider totals. Used after restoring the multi-wallet hierarchy.
+     */
+    public function syncHierarchyBalances(?int $merchantId = null): int
+    {
+        $providerUpdated = $this->syncProviderTotalBalances($merchantId);
+        $parentUpdated = $this->syncParentWalletBalances($merchantId);
+
+        return $providerUpdated + $parentUpdated;
+    }
+
+    /**
+     * Rebuild each PROVIDER_TOTAL balance from the sum of its leaf children.
+     */
+    public function syncProviderTotalBalances(?int $merchantId = null): int
+    {
+        $query = Wallet::query()
+            ->where('wallet_type', WalletType::ProviderTotal)
+            ->with(['balance', 'childWallets.balance']);
+
+        if ($merchantId !== null) {
+            $query->where('merchant_id', $merchantId);
+        }
+
+        $updated = 0;
+
+        foreach ($query->get() as $providerWallet) {
+            if ($providerWallet->balance === null) {
+                continue;
+            }
+
+            $available = '0.0000';
+            $reserved = '0.0000';
+            $total = '0.0000';
+
+            foreach ($providerWallet->childWallets as $childWallet) {
+                if ($childWallet->balance === null) {
+                    continue;
+                }
+
+                $available = bcadd($available, (string) $childWallet->balance->available, 4);
+                $reserved = bcadd($reserved, (string) $childWallet->balance->reserved, 4);
+                $total = bcadd($total, (string) $childWallet->balance->total, 4);
+            }
+
+            $providerWallet->balance->update([
+                'available' => $available,
+                'reserved' => $reserved,
+                'total' => $total,
+            ]);
+
+            $updated++;
+        }
+
+        return $updated;
+    }
+
+    /**
+     * Rebuild each ancestor of a leaf wallet from the sum of its children.
+     * syncParentWalletBalances() only rebuilds MERCHANT_PARENT, so provider
+     * totals need this when balances move directly between leaves.
+     */
+    private function recomputeAncestorBalances(Wallet $wallet): void
+    {
+        $parentId = $wallet->parent_wallet_id;
+
+        while ($parentId !== null) {
+            $parent = $this->walletRepository->findWithBalanceForUpdate($parentId);
+
+            if ($parent === null) {
+                return;
+            }
+
+            if ($parent->balance !== null) {
+                $available = '0.0000';
+                $reserved = '0.0000';
+                $total = '0.0000';
+
+                $children = Wallet::query()
+                    ->where('parent_wallet_id', $parent->id)
+                    ->with('balance')
+                    ->get();
+
+                foreach ($children as $child) {
+                    if ($child->balance === null) {
+                        continue;
+                    }
+
+                    $available = bcadd($available, (string) $child->balance->available, 4);
+                    $reserved = bcadd($reserved, (string) $child->balance->reserved, 4);
+                    $total = bcadd($total, (string) $child->balance->total, 4);
+                }
+
+                $parent->balance->update([
+                    'available' => $available,
+                    'reserved' => $reserved,
+                    'total' => $total,
+                ]);
+            }
+
+            $parentId = $parent->parent_wallet_id;
+        }
     }
 
     private function postMirrorCredit(

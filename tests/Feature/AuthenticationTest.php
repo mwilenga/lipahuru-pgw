@@ -51,4 +51,52 @@ class AuthenticationTest extends GatewayTestCase
         $response->assertOk()
             ->assertJsonPath('data.token', fn ($value) => ! empty($value));
     }
+
+    public function test_portal_login_routes_admin_by_email(): void
+    {
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'admin@lipahuru.test',
+            'password' => 'password',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.role', 'admin')
+            ->assertJsonPath('data.token', fn ($value) => ! empty($value));
+    }
+
+    public function test_portal_login_routes_merchant_by_email(): void
+    {
+        $credentials = $this->createActiveMerchantWithCredentials();
+
+        \App\Models\MerchantUser::query()->create([
+            'merchant_id' => $credentials['merchant']->id,
+            'name' => 'Owner',
+            'email' => 'owner@merchant.test',
+            'password' => 'password',
+            'role' => 'owner',
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'owner@merchant.test',
+            'password' => 'password',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.role', 'merchant')
+            ->assertJsonPath('data.user.merchantId', $credentials['merchant']->id)
+            ->assertJsonPath('data.token', fn ($value) => ! empty($value));
+    }
+
+    public function test_portal_login_rejects_invalid_credentials(): void
+    {
+        $response = $this->postJson('/api/v1/login', [
+            'email' => 'nobody@example.com',
+            'password' => 'wrong',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJsonPath('code', 'PGW-1007');
+    }
 }

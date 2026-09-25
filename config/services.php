@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'kilakona_sms' => [
+        'api_key' => env('KILAKONA_SMS_API_KEY'),
+        'api_secret' => env('KILAKONA_SMS_API_SECRET'),
+        'send_url' => env(
+            'KILAKONA_SMS_SEND_URL',
+            'https://messaging.kilakona.co.tz/api/v1/vendor/message/send',
+        ),
+        'sender_id' => env('KILAKONA_SMS_SENDER_ID', 'NIALIKE'),
+        'recipients' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('ADMIN_SMS_RECIPIENTS', '')),
+        ))),
+    ],
+
 ];

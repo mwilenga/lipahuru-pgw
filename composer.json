@@ -1,9 +1,9 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "mwilenga/lipahuru-pgw",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "LipaHuru payment gateway API.",
+    "keywords": ["lipahuru", "payments", "gateway"],
     "license": "MIT",
     "require": {
         "php": "^8.2",
