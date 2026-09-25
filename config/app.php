@@ -13,7 +13,19 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'LipaHuru'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Frontend / portal URL
+    |--------------------------------------------------------------------------
+    |
+    | Used by the gateway welcome page and other user-facing links back to the
+    | admin / merchant portal.
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL'),
 
     /*
     |--------------------------------------------------------------------------
