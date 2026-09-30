@@ -7,6 +7,7 @@ use App\Enums\TransactionStatus;
 use App\Models\Transaction;
 use App\Providers\Payment\ProviderRouter;
 use App\Services\Payment\PaymentService;
+use App\Services\Webhook\MerchantWebhookService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -20,8 +21,11 @@ class PollProviderStatusJob implements ShouldQueue
         $this->onQueue('payments');
     }
 
-    public function handle(ProviderRouter $providerRouter, PaymentService $paymentService): void
-    {
+    public function handle(
+        ProviderRouter $providerRouter,
+        PaymentService $paymentService,
+        MerchantWebhookService $merchantWebhookService,
+    ): void {
         $query = Transaction::query()
             ->whereIn('status', [TransactionStatus::Acknowledged, TransactionStatus::PendingFinal])
             ->where('updated_at', '<=', now()->subSeconds((int) config('payment-gateway.poll_pending_after_seconds', 120)));
@@ -47,14 +51,18 @@ class PollProviderStatusJob implements ShouldQueue
             $status = $provider->queryStatus((string) $transaction->provider_transaction_id);
 
             if ($status->status === TransactionStatus::Success) {
-                $paymentService->finalizeSuccess($transaction);
+                $finalized = $paymentService->finalizeSuccess($transaction);
             } elseif ($status->status === TransactionStatus::Failed) {
-                $paymentService->finalizeFailure(
+                $finalized = $paymentService->finalizeFailure(
                     $transaction,
                     $status->failureCode,
                     $status->failureMessage,
                 );
+            } else {
+                continue;
             }
+
+            $merchantWebhookService->dispatchPaymentFinalized($finalized);
         }
     }
 }
