@@ -14,6 +14,8 @@ return [
     ],
     'webhook_retry_delays' => [60, 300, 900, 3600, 21600, 86400],
     'poll_pending_after_seconds' => (int) env('GATEWAY_POLL_PENDING_AFTER', 120),
+    /** Pending transactions older than this are left for manual reconciliation. */
+    'poll_max_age_hours' => (int) env('GATEWAY_POLL_MAX_AGE_HOURS', 24),
     'credential_rotation_grace_hours' => 24,
     /** Calendar-day filters (from/to) are interpreted in this timezone. */
     'filter_timezone' => env('GATEWAY_FILTER_TIMEZONE', 'Africa/Dar_es_Salaam'),
