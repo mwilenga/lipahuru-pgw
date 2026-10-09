@@ -3,6 +3,7 @@
 namespace App\Services\Sms;
 
 use App\Models\FloatTopup;
+use App\Models\SettlementRequest;
 use App\Models\WalletTransfer;
 
 class AdminApprovalSmsNotifier
@@ -40,6 +41,27 @@ class AdminApprovalSmsNotifier
         $link = $this->approvalLink('/admin/transfers', (string) $transfer->id);
 
         $message = "LipaHuru: Fund transfer pending from {$merchantName}. ID {$transfer->transfer_id}. Amount {$amount} {$currency}.";
+        if ($link !== null) {
+            $message .= " Approve: {$link}";
+        } else {
+            $message .= ' Please approve in portal.';
+        }
+
+        $this->smsClient->send($message);
+    }
+
+    public function notifySettlementRequest(SettlementRequest $settlement): void
+    {
+        $settlement->loadMissing(['merchant', 'wallet.providerNetwork']);
+
+        $merchantName = $settlement->merchant?->name ?? 'Unknown merchant';
+        $amount = $this->formatAmount((string) $settlement->amount);
+        $currency = $settlement->currency ?? 'TZS';
+        $network = $settlement->wallet?->providerNetwork?->code?->value;
+        $link = $this->approvalLink('/admin/settlements', (string) $settlement->id);
+
+        $message = "LipaHuru: Settlement request from {$merchantName}. ID {$settlement->request_id}. Amount {$amount} {$currency}";
+        $message .= $network !== null ? " from {$network} collections." : '.';
         if ($link !== null) {
             $message .= " Approve: {$link}";
         } else {

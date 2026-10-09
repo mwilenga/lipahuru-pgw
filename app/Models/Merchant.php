@@ -25,6 +25,10 @@ class Merchant extends Authenticatable
         'environment',
         'default_currency',
         'default_callback_url',
+        'settlement_bank_name',
+        'settlement_account_name',
+        'settlement_account_number',
+        'settlement_bank_branch',
         'metadata',
         'approved_at',
     ];
@@ -101,6 +105,16 @@ class Merchant extends Authenticatable
     public function walletTransfers(): HasMany
     {
         return $this->hasMany(WalletTransfer::class);
+    }
+
+    public function settlementRequests(): HasMany
+    {
+        return $this->hasMany(SettlementRequest::class);
+    }
+
+    public function hasSettlementBankAccount(): bool
+    {
+        return filled($this->settlement_bank_name) && filled($this->settlement_account_number);
     }
 
     public function idempotencyRecords(): HasMany

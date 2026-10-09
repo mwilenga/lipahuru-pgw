@@ -2,17 +2,22 @@
 
 namespace App\Services\Payment;
 
-use App\Enums\PaymentOperation;
 use App\Enums\ProviderCode;
 use App\Enums\TransactionStatus;
 use App\Models\Merchant;
 use App\Models\Transaction;
+use App\Services\Merchant\CommissionFeeCalculator;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class TransactionHistoryService
 {
+    public function __construct(
+        private readonly CommissionFeeCalculator $commissionFeeCalculator,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $filters
      */
@@ -30,9 +35,9 @@ class TransactionHistoryService
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Transaction>
+     * @return Collection<int, Transaction>
      */
-    public function listPendingForPolling(): \Illuminate\Database\Eloquent\Collection
+    public function listPendingForPolling(): Collection
     {
         $afterSeconds = (int) config('payment-gateway.poll_pending_after_seconds', 120);
 
@@ -45,9 +50,9 @@ class TransactionHistoryService
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Collection<int, Transaction>
+     * @return Collection<int, Transaction>
      */
-    public function listForReconciliation(): \Illuminate\Database\Eloquent\Collection
+    public function listForReconciliation(): Collection
     {
         return Transaction::query()
             ->where('status', TransactionStatus::Reconciling)
@@ -71,41 +76,46 @@ class TransactionHistoryService
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{totalAmount: string, currency: string, count: int}
+     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
      */
     public function summarizeAll(array $filters = []): array
     {
-        $query = $this->applyFilters(Transaction::query(), $filters);
-
-        $count = (clone $query)->count();
-        $totalAmount = (clone $query)->sum('amount');
-        $currency = (string) config('payment-gateway.default_currency', 'TZS');
-
-        return [
-            'totalAmount' => number_format((float) $totalAmount, 4, '.', ''),
-            'currency' => $currency,
-            'count' => $count,
-        ];
+        return $this->summarize(
+            $this->applyFilters(Transaction::query(), $filters),
+            (string) config('payment-gateway.default_currency', 'TZS'),
+        );
     }
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{totalAmount: string, currency: string, count: int}
+     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
      */
     public function summarizeForMerchant(Merchant $merchant, array $filters = []): array
     {
-        $query = $this->applyFilters(
-            Transaction::query()->where('merchant_id', $merchant->id),
-            $filters,
+        return $this->summarize(
+            $this->applyFilters(Transaction::query()->where('merchant_id', $merchant->id), $filters),
+            (string) $merchant->default_currency,
         );
+    }
 
-        $count = (clone $query)->count();
-        $totalAmount = (clone $query)->sum('amount');
+    /**
+     * Charges and net only cover SUCCESS transactions; totalAmount/count cover all matching rows.
+     *
+     * @param  Builder<Transaction>  $query
+     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
+     */
+    private function summarize(Builder $query, string $currency): array
+    {
+        $success = $this->commissionFeeCalculator->successTotalsForQuery($query);
 
         return [
-            'totalAmount' => number_format((float) $totalAmount, 4, '.', ''),
-            'currency' => $merchant->default_currency,
-            'count' => $count,
+            'totalAmount' => number_format((float) (clone $query)->sum('amount'), 4, '.', ''),
+            'currency' => $currency,
+            'count' => (clone $query)->count(),
+            'successCount' => $success['count'],
+            'successAmount' => $success['amount'],
+            'feeAmount' => $success['fee'],
+            'netAmount' => $success['net'],
         ];
     }
 

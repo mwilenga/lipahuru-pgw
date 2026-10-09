@@ -31,6 +31,10 @@ class AdminMerchantUpdateRequest extends GatewayFormRequest
             'environment' => ['sometimes', 'string', 'in:uat,production'],
             'default_currency' => ['sometimes', 'string', 'size:3', 'in:TZS'],
             'default_callback_url' => ['sometimes', 'nullable', 'url', 'max:2048'],
+            'settlement_bank_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'settlement_account_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'settlement_account_number' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'settlement_bank_branch' => ['sometimes', 'nullable', 'string', 'max:255'],
             'metadata' => ['sometimes', 'nullable', 'array'],
         ];
     }

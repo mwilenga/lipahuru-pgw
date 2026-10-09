@@ -61,4 +61,53 @@ class PollProviderStatusCallbackTest extends GatewayTestCase
 
         Queue::assertPushedOn('webhooks', DeliverMerchantWebhookJob::class);
     }
+
+    public function test_provider_error_on_one_transaction_does_not_stop_others(): void
+    {
+        Queue::fake();
+
+        $credentials = $this->createActiveMerchantWithCredentials();
+        $merchant = $credentials['merchant'];
+        $networkId = $merchant->providerProfiles()->first()->provider_network_id;
+
+        $missing = $this->pendingTransaction($merchant->id, $networkId, 'TXN-TESTPOLL0002', 'missing-at-provider');
+        $found = $this->pendingTransaction($merchant->id, $networkId, 'TXN-TESTPOLL0003', 'GD-POLL-003');
+
+        $provider = Mockery::mock(PaymentProviderInterface::class);
+        $provider->shouldReceive('queryStatus')
+            ->with('missing-at-provider')
+            ->andThrow(new \RuntimeException('Transaction not found'));
+        $provider->shouldReceive('queryStatus')
+            ->with('GD-POLL-003')
+            ->andReturn(new ProviderStatusResponse('GD-POLL-003', TransactionStatus::Success));
+
+        $router = Mockery::mock(ProviderRouter::class);
+        $router->shouldReceive('resolve')->andReturn($provider);
+        $this->app->instance(ProviderRouter::class, $router);
+
+        $this->app->call([new PollProviderStatusJob, 'handle']);
+
+        $this->assertSame(TransactionStatus::Acknowledged, $missing->fresh()->status);
+        $this->assertSame(TransactionStatus::Success, $found->fresh()->status);
+    }
+
+    private function pendingTransaction(int $merchantId, int $networkId, string $transactionId, string $providerRef): Transaction
+    {
+        $transaction = Transaction::query()->create([
+            'transaction_id' => $transactionId,
+            'merchant_id' => $merchantId,
+            'provider_network_id' => $networkId,
+            'request_id' => 'req-'.$transactionId,
+            'reference' => 'INV-'.$transactionId,
+            'operation' => PaymentOperation::C2bPush,
+            'status' => TransactionStatus::Acknowledged,
+            'amount' => 1000,
+            'currency' => 'TZS',
+            'msisdn' => '255754123456',
+            'provider_transaction_id' => $providerRef,
+        ]);
+        Transaction::query()->whereKey($transaction->id)->update(['updated_at' => now()->subHour()]);
+
+        return $transaction;
+    }
 }

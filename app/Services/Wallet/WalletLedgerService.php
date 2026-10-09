@@ -9,7 +9,6 @@ use App\Models\BalanceReservation;
 use App\Models\LedgerEntry;
 use App\Models\Transaction;
 use App\Models\Wallet;
-use App\Models\WalletBalance;
 use App\Repositories\Contracts\WalletRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -273,7 +272,89 @@ class WalletLedgerService
         string $currency,
         string $reference,
     ): void {
-        DB::transaction(function () use ($from, $amount, $currency, $reference): void {
+        $this->holdFunds($from, $amount, $currency, $reference, 'TRANSFER_HOLD', 'Funds held for wallet transfer');
+    }
+
+    /**
+     * Release a hold back to available funds (transfer rejected).
+     */
+    public function releaseTransferFunds(
+        Wallet $from,
+        string $amount,
+        string $currency,
+        string $reference,
+    ): void {
+        $this->releaseHeldFunds($from, $amount, $currency, $reference, 'TRANSFER_RELEASE', 'Wallet transfer hold released');
+    }
+
+    /**
+     * Hold the payout amount plus commission while a settlement awaits approval.
+     */
+    public function holdSettlementFunds(Wallet $wallet, string $amount, string $currency, string $reference): void
+    {
+        $this->holdFunds($wallet, $amount, $currency, $reference, 'SETTLEMENT_HOLD', 'Funds held for settlement request');
+    }
+
+    public function releaseSettlementFunds(Wallet $wallet, string $amount, string $currency, string $reference): void
+    {
+        $this->releaseHeldFunds($wallet, $amount, $currency, $reference, 'SETTLEMENT_RELEASE', 'Settlement hold released');
+    }
+
+    /**
+     * Remove held funds from the wallet; the money leaves the platform to the merchant bank.
+     */
+    public function debitSettlementFunds(Wallet $wallet, string $amount, string $currency, string $reference): void
+    {
+        DB::transaction(function () use ($wallet, $amount, $currency, $reference): void {
+            $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($wallet->id);
+
+            if ($lockedWallet?->balance === null) {
+                throw new GatewayException(GatewayErrorCode::GeneralError, 'Wallet balance not found', httpStatus: 422);
+            }
+
+            $balance = $lockedWallet->balance;
+
+            if (bccomp((string) $balance->reserved, $amount, 4) < 0) {
+                throw new GatewayException(
+                    GatewayErrorCode::InsufficientBalance,
+                    'Held funds are no longer available for this settlement.',
+                    httpStatus: 422,
+                );
+            }
+
+            $reservedAfter = bcsub((string) $balance->reserved, $amount, 4);
+            $totalAfter = bcsub((string) $balance->total, $amount, 4);
+
+            $balance->update([
+                'reserved' => $reservedAfter,
+                'total' => $totalAfter,
+            ]);
+
+            LedgerEntry::query()->create([
+                'wallet_id' => $lockedWallet->id,
+                'transaction_id' => null,
+                'entry_type' => 'SETTLEMENT_DEBIT',
+                'amount' => $amount,
+                'currency' => $currency,
+                'balance_after' => $totalAfter,
+                'reference' => $reference,
+                'description' => 'Settlement paid out to bank',
+                'created_at' => now(),
+            ]);
+
+            $this->recomputeAncestorBalances($lockedWallet);
+        });
+    }
+
+    private function holdFunds(
+        Wallet $from,
+        string $amount,
+        string $currency,
+        string $reference,
+        string $entryType,
+        string $description,
+    ): void {
+        DB::transaction(function () use ($from, $amount, $currency, $reference, $entryType, $description): void {
             $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($from->id);
 
             if ($lockedWallet?->balance === null) {
@@ -297,12 +378,12 @@ class WalletLedgerService
             LedgerEntry::query()->create([
                 'wallet_id' => $lockedWallet->id,
                 'transaction_id' => null,
-                'entry_type' => 'TRANSFER_HOLD',
+                'entry_type' => $entryType,
                 'amount' => $amount,
                 'currency' => $currency,
                 'balance_after' => $availableAfter,
                 'reference' => $reference,
-                'description' => 'Funds held for wallet transfer',
+                'description' => $description,
                 'created_at' => now(),
             ]);
 
@@ -310,16 +391,15 @@ class WalletLedgerService
         });
     }
 
-    /**
-     * Release a hold back to available funds (transfer rejected).
-     */
-    public function releaseTransferFunds(
+    private function releaseHeldFunds(
         Wallet $from,
         string $amount,
         string $currency,
         string $reference,
+        string $entryType,
+        string $description,
     ): void {
-        DB::transaction(function () use ($from, $amount, $currency, $reference): void {
+        DB::transaction(function () use ($from, $amount, $currency, $reference, $entryType, $description): void {
             $lockedWallet = $this->walletRepository->findWithBalanceForUpdate($from->id);
 
             if ($lockedWallet?->balance === null) {
@@ -338,12 +418,12 @@ class WalletLedgerService
             LedgerEntry::query()->create([
                 'wallet_id' => $lockedWallet->id,
                 'transaction_id' => null,
-                'entry_type' => 'TRANSFER_RELEASE',
+                'entry_type' => $entryType,
                 'amount' => $amount,
                 'currency' => $currency,
                 'balance_after' => $availableAfter,
                 'reference' => $reference,
-                'description' => 'Wallet transfer hold released',
+                'description' => $description,
                 'created_at' => now(),
             ]);
 
