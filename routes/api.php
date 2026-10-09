@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\V1\AdminAuthController;
 use App\Http\Controllers\Admin\V1\AdminFloatTopupController;
 use App\Http\Controllers\Admin\V1\AdminMerchantCommissionController;
 use App\Http\Controllers\Admin\V1\AdminMerchantController;
+use App\Http\Controllers\Admin\V1\AdminMerchantFundsController;
 use App\Http\Controllers\Admin\V1\AdminMonitoringController;
 use App\Http\Controllers\Admin\V1\AdminPortalController;
 use App\Http\Controllers\Admin\V1\AdminProviderController;
@@ -112,6 +113,7 @@ Route::prefix('admin/v1')
         Route::get('/audit-logs', [AdminMonitoringController::class, 'auditLogs']);
 
         Route::get('/reports/merchant-summary', [AdminReportController::class, 'merchantSummary']);
+        Route::get('/reports/merchant-funds', [AdminMerchantFundsController::class, 'index']);
 
         Route::get('/settlements', [AdminSettlementController::class, 'index']);
         Route::post('/settlements/trigger', [AdminSettlementController::class, 'trigger']);

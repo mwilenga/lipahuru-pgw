@@ -9,6 +9,7 @@ use App\Models\Merchant;
 use App\Models\MerchantCommission;
 use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
 class CommissionFeeCalculator
@@ -98,11 +99,41 @@ class CommissionFeeCalculator
      */
     public function successTotalsForQuery(Builder $transactions): array
     {
+        return $this->formatTotals($this->successTotalsQuery($transactions)->first());
+    }
+
+    /**
+     * Same as successTotalsForQuery(), grouped per merchant.
+     *
+     * @param  Builder<Transaction>  $transactions
+     * @return array<int, array{count: int, amount: string, fee: string, net: string}>
+     */
+    public function successTotalsByMerchant(Builder $transactions): array
+    {
+        $totals = [];
+
+        $rows = $this->successTotalsQuery($transactions)
+            ->addSelect('t.merchant_id')
+            ->groupBy('t.merchant_id')
+            ->get();
+
+        foreach ($rows as $row) {
+            $totals[(int) $row->merchant_id] = $this->formatTotals($row);
+        }
+
+        return $totals;
+    }
+
+    /**
+     * @param  Builder<Transaction>  $transactions
+     */
+    private function successTotalsQuery(Builder $transactions): QueryBuilder
+    {
         $successful = (clone $transactions)
             ->where('status', TransactionStatus::Success)
             ->select(['transactions.merchant_id', 'transactions.operation', 'transactions.amount']);
 
-        $row = DB::query()
+        return DB::query()
             ->fromSub($successful, 't')
             ->leftJoin('merchant_commissions as mc', function ($join) {
                 $join->on('mc.merchant_id', '=', 't.merchant_id')
@@ -118,9 +149,14 @@ class CommissionFeeCalculator
                     ELSE 0
                 END), 0) AS fee_amount',
                 [CommissionType::Fixed->value, CommissionType::Percent->value],
-            )
-            ->first();
+            );
+    }
 
+    /**
+     * @return array{count: int, amount: string, fee: string, net: string}
+     */
+    private function formatTotals(?object $row): array
+    {
         $amount = number_format((float) ($row->success_amount ?? 0), 4, '.', '');
         $fee = number_format((float) ($row->fee_amount ?? 0), 4, '.', '');
         $net = bcsub($amount, $fee, 4);
