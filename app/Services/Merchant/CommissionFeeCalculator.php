@@ -7,6 +7,7 @@ use App\Enums\PaymentOperation;
 use App\Models\Merchant;
 use App\Models\MerchantCommission;
 use App\Models\Transaction;
+use Illuminate\Database\Eloquent\Builder;
 
 class CommissionFeeCalculator
 {
@@ -53,6 +54,42 @@ class CommissionFeeCalculator
         };
 
         return round(min($fee, $amount), 4);
+    }
+
+    /**
+     * Sum of per-transaction fees over a transaction query, matching feeFor() per row.
+     *
+     * @param  Builder<Transaction>  $transactions
+     */
+    public function totalFeeForQuery(Builder $transactions, ?MerchantCommission $commission): string
+    {
+        $value = number_format((float) ($commission?->value ?? 0), 4, '.', '');
+
+        if ($commission === null || bccomp($value, '0', 4) <= 0) {
+            return '0.0000';
+        }
+
+        if ($commission->commission_type === CommissionType::Fixed) {
+            $sum = (clone $transactions)
+                ->selectRaw('COALESCE(SUM(CASE WHEN amount < ? THEN amount ELSE ? END), 0) AS fee', [$value, $value])
+                ->value('fee');
+
+            return number_format((float) $sum, 4, '.', '');
+        }
+
+        if ($commission->commission_type !== CommissionType::Percent) {
+            return '0.0000';
+        }
+
+        $rate = bccomp($value, '100', 4) > 0 ? '100' : $value;
+        $gross = number_format((float) (clone $transactions)->sum('amount'), 4, '.', '');
+
+        return bcdiv(bcmul($gross, $rate, 8), '100', 4);
+    }
+
+    public function commissionFor(Merchant $merchant, PaymentOperation $operation): ?MerchantCommission
+    {
+        return $this->resolveCommission($merchant, $operation);
     }
 
     private function resolveCommission(Merchant $merchant, PaymentOperation $operation): ?MerchantCommission

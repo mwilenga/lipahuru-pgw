@@ -2,7 +2,6 @@
 
 namespace App\Services\Settlement;
 
-use App\Enums\CommissionType;
 use App\Enums\GatewayErrorCode;
 use App\Enums\PaymentOperation;
 use App\Enums\SettlementRequestStatus;
@@ -17,6 +16,7 @@ use App\Models\SettlementRequest;
 use App\Models\Transaction;
 use App\Models\Wallet;
 use App\Repositories\Contracts\WalletRepositoryInterface;
+use App\Services\Merchant\CommissionFeeCalculator;
 use App\Services\Sms\AdminApprovalSmsNotifier;
 use App\Services\Wallet\WalletLedgerService;
 use Carbon\Carbon;
@@ -36,6 +36,7 @@ class SettlementRequestService
         private readonly WalletLedgerService $walletLedgerService,
         private readonly WalletRepositoryInterface $walletRepository,
         private readonly AdminApprovalSmsNotifier $adminApprovalSmsNotifier,
+        private readonly CommissionFeeCalculator $commissionFeeCalculator,
     ) {}
 
     /**
@@ -254,9 +255,7 @@ class SettlementRequestService
 
     private function accruedCommission(Wallet $wallet, ?MerchantCommission $commission): string
     {
-        $value = number_format((float) ($commission?->value ?? 0), 4, '.', '');
-
-        if ($commission === null || bccomp($value, '0', 4) <= 0 || $wallet->provider_network_id === null) {
+        if ($wallet->provider_network_id === null) {
             return '0.0000';
         }
 
@@ -266,18 +265,7 @@ class SettlementRequestService
             ->where('operation', PaymentOperation::C2bPush)
             ->where('status', TransactionStatus::Success);
 
-        if ($commission->commission_type === CommissionType::Fixed) {
-            $sum = $collections
-                ->selectRaw('COALESCE(SUM(CASE WHEN amount < ? THEN amount ELSE ? END), 0) AS fee', [$value, $value])
-                ->value('fee');
-
-            return number_format((float) $sum, 4, '.', '');
-        }
-
-        $rate = bccomp($value, '100', 4) > 0 ? '100' : $value;
-        $gross = number_format((float) $collections->sum('amount'), 4, '.', '');
-
-        return bcdiv(bcmul($gross, $rate, 8), '100', 4);
+        return $this->commissionFeeCalculator->totalFeeForQuery($collections, $commission);
     }
 
     private function collectionCommission(Merchant $merchant): ?MerchantCommission
