@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\V1\AdminPortalController;
 use App\Http\Controllers\Admin\V1\AdminProviderController;
 use App\Http\Controllers\Admin\V1\AdminReportController;
 use App\Http\Controllers\Admin\V1\AdminSettlementController;
+use App\Http\Controllers\Admin\V1\AdminSettlementRequestController;
 use App\Http\Controllers\Admin\V1\AdminTransactionController;
 use App\Http\Controllers\Admin\V1\AdminWalletTransferController;
 use App\Http\Controllers\Api\V1\CollectionController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Api\V1\WebhookController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Portal\MerchantFloatTopupController;
 use App\Http\Controllers\Portal\MerchantPortalController;
+use App\Http\Controllers\Portal\MerchantSettlementRequestController;
 use App\Http\Controllers\Portal\MerchantWalletTransferController;
 use Illuminate\Support\Facades\Route;
 
@@ -70,6 +72,10 @@ Route::prefix('v1/portal')
         Route::get('/wallet-transfers', [MerchantWalletTransferController::class, 'index']);
         Route::get('/wallet-transfers/transferable-wallets', [MerchantWalletTransferController::class, 'transferableWallets']);
         Route::post('/wallet-transfers', [MerchantWalletTransferController::class, 'store']);
+        Route::get('/settlements', [MerchantSettlementRequestController::class, 'index']);
+        Route::get('/settlements/wallets', [MerchantSettlementRequestController::class, 'wallets']);
+        Route::post('/settlements', [MerchantSettlementRequestController::class, 'store']);
+        Route::post('/settlements/{id}/cancel', [MerchantSettlementRequestController::class, 'cancel']);
     });
 
 Route::prefix('admin/v1')
@@ -109,6 +115,10 @@ Route::prefix('admin/v1')
 
         Route::get('/settlements', [AdminSettlementController::class, 'index']);
         Route::post('/settlements/trigger', [AdminSettlementController::class, 'trigger']);
+
+        Route::get('/settlement-requests', [AdminSettlementRequestController::class, 'index']);
+        Route::post('/settlement-requests/{id}/approve', [AdminSettlementRequestController::class, 'approve']);
+        Route::post('/settlement-requests/{id}/reject', [AdminSettlementRequestController::class, 'reject']);
 
         Route::get('/transactions', [AdminTransactionController::class, 'index']);
     });
