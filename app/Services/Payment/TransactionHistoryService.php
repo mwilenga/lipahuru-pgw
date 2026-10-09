@@ -2,7 +2,6 @@
 
 namespace App\Services\Payment;
 
-use App\Enums\PaymentOperation;
 use App\Enums\ProviderCode;
 use App\Enums\TransactionStatus;
 use App\Models\Merchant;
@@ -77,61 +76,46 @@ class TransactionHistoryService
 
     /**
      * @param  array<string, mixed>  $filters
-     * @return array{totalAmount: string, currency: string, count: int}
+     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
      */
     public function summarizeAll(array $filters = []): array
     {
-        $query = $this->applyFilters(Transaction::query(), $filters);
-
-        $count = (clone $query)->count();
-        $totalAmount = (clone $query)->sum('amount');
-        $currency = (string) config('payment-gateway.default_currency', 'TZS');
-
-        return [
-            'totalAmount' => number_format((float) $totalAmount, 4, '.', ''),
-            'currency' => $currency,
-            'count' => $count,
-        ];
+        return $this->summarize(
+            $this->applyFilters(Transaction::query(), $filters),
+            (string) config('payment-gateway.default_currency', 'TZS'),
+        );
     }
 
     /**
-     * Charges and net only cover SUCCESS transactions; totalAmount/count cover all matching rows.
-     *
      * @param  array<string, mixed>  $filters
      * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
      */
     public function summarizeForMerchant(Merchant $merchant, array $filters = []): array
     {
-        $query = $this->applyFilters(
-            Transaction::query()->where('merchant_id', $merchant->id),
-            $filters,
+        return $this->summarize(
+            $this->applyFilters(Transaction::query()->where('merchant_id', $merchant->id), $filters),
+            (string) $merchant->default_currency,
         );
+    }
 
-        $count = (clone $query)->count();
-        $totalAmount = (clone $query)->sum('amount');
-
-        $successful = (clone $query)->where('status', TransactionStatus::Success);
-        $successCount = (clone $successful)->count();
-        $successAmount = number_format((float) (clone $successful)->sum('amount'), 4, '.', '');
-
-        $feeAmount = '0.0000';
-        foreach ([PaymentOperation::C2bPush, PaymentOperation::B2cDisbursement] as $operation) {
-            $feeAmount = bcadd($feeAmount, $this->commissionFeeCalculator->totalFeeForQuery(
-                (clone $successful)->where('operation', $operation),
-                $this->commissionFeeCalculator->commissionFor($merchant, $operation),
-            ), 4);
-        }
-
-        $netAmount = bcsub($successAmount, $feeAmount, 4);
+    /**
+     * Charges and net only cover SUCCESS transactions; totalAmount/count cover all matching rows.
+     *
+     * @param  Builder<Transaction>  $query
+     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
+     */
+    private function summarize(Builder $query, string $currency): array
+    {
+        $success = $this->commissionFeeCalculator->successTotalsForQuery($query);
 
         return [
-            'totalAmount' => number_format((float) $totalAmount, 4, '.', ''),
-            'currency' => $merchant->default_currency,
-            'count' => $count,
-            'successCount' => $successCount,
-            'successAmount' => $successAmount,
-            'feeAmount' => $feeAmount,
-            'netAmount' => bccomp($netAmount, '0', 4) < 0 ? '0.0000' : $netAmount,
+            'totalAmount' => number_format((float) (clone $query)->sum('amount'), 4, '.', ''),
+            'currency' => $currency,
+            'count' => (clone $query)->count(),
+            'successCount' => $success['count'],
+            'successAmount' => $success['amount'],
+            'feeAmount' => $success['fee'],
+            'netAmount' => $success['net'],
         ];
     }
 

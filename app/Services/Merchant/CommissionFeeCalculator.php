@@ -4,10 +4,12 @@ namespace App\Services\Merchant;
 
 use App\Enums\CommissionType;
 use App\Enums\PaymentOperation;
+use App\Enums\TransactionStatus;
 use App\Models\Merchant;
 use App\Models\MerchantCommission;
 use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class CommissionFeeCalculator
 {
@@ -87,9 +89,48 @@ class CommissionFeeCalculator
         return bcdiv(bcmul($gross, $rate, 8), '100', 4);
     }
 
-    public function commissionFor(Merchant $merchant, PaymentOperation $operation): ?MerchantCommission
+    /**
+     * Count, gross and fee totals for the SUCCESS rows of a transaction query, using each
+     * row's merchant commission for its operation (matching feeFor() per row).
+     *
+     * @param  Builder<Transaction>  $transactions
+     * @return array{count: int, amount: string, fee: string, net: string}
+     */
+    public function successTotalsForQuery(Builder $transactions): array
     {
-        return $this->resolveCommission($merchant, $operation);
+        $successful = (clone $transactions)
+            ->where('status', TransactionStatus::Success)
+            ->select(['transactions.merchant_id', 'transactions.operation', 'transactions.amount']);
+
+        $row = DB::query()
+            ->fromSub($successful, 't')
+            ->leftJoin('merchant_commissions as mc', function ($join) {
+                $join->on('mc.merchant_id', '=', 't.merchant_id')
+                    ->on('mc.operation', '=', 't.operation');
+            })
+            ->selectRaw('COUNT(*) AS success_count')
+            ->selectRaw('COALESCE(SUM(t.amount), 0) AS success_amount')
+            ->selectRaw(
+                'COALESCE(SUM(CASE
+                    WHEN mc.value IS NULL OR mc.value <= 0 THEN 0
+                    WHEN mc.commission_type = ? THEN CASE WHEN t.amount < mc.value THEN t.amount ELSE mc.value END
+                    WHEN mc.commission_type = ? THEN t.amount * CASE WHEN mc.value > 100 THEN 100 ELSE mc.value END / 100
+                    ELSE 0
+                END), 0) AS fee_amount',
+                [CommissionType::Fixed->value, CommissionType::Percent->value],
+            )
+            ->first();
+
+        $amount = number_format((float) ($row->success_amount ?? 0), 4, '.', '');
+        $fee = number_format((float) ($row->fee_amount ?? 0), 4, '.', '');
+        $net = bcsub($amount, $fee, 4);
+
+        return [
+            'count' => (int) ($row->success_count ?? 0),
+            'amount' => $amount,
+            'fee' => $fee,
+            'net' => bccomp($net, '0', 4) < 0 ? '0.0000' : $net,
+        ];
     }
 
     private function resolveCommission(Merchant $merchant, PaymentOperation $operation): ?MerchantCommission

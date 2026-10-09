@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\CommissionType;
 use App\Enums\PaymentOperation;
 use App\Enums\TransactionStatus;
+use App\Models\AdminUser;
 use App\Models\Merchant;
 use App\Models\MerchantCommission;
 use App\Models\MerchantUser;
@@ -57,6 +58,31 @@ class MerchantTransactionSummaryTest extends GatewayTestCase
             ->assertJsonPath('data.summary.successAmount', '3200.0000')
             ->assertJsonPath('data.summary.feeAmount', '700.0000')
             ->assertJsonPath('data.summary.netAmount', '2500.0000');
+    }
+
+    public function test_admin_summary_applies_each_merchants_commission(): void
+    {
+        [$first] = $this->createMerchantPortalSession();
+        [$second] = $this->createMerchantPortalSession();
+        $this->setCommission($first, PaymentOperation::C2bPush, CommissionType::Percent, '2');
+        $this->setCommission($second, PaymentOperation::C2bPush, CommissionType::Fixed, '500');
+
+        $this->createTransaction($first, PaymentOperation::C2bPush, TransactionStatus::Success, '10000');
+        $this->createTransaction($second, PaymentOperation::C2bPush, TransactionStatus::Success, '8000');
+        $this->createTransaction($second, PaymentOperation::C2bPush, TransactionStatus::Success, '300');
+        $this->createTransaction($second, PaymentOperation::C2bPush, TransactionStatus::PendingFinal, '9000');
+
+        $admin = AdminUser::query()->where('email', 'admin@lipahuru.test')->firstOrFail();
+
+        $this->withToken($admin->createToken('admin-dashboard')->plainTextToken, 'Bearer')
+            ->getJson('/api/admin/v1/transactions?operation=C2B_USSD_PUSH')
+            ->assertOk()
+            ->assertJsonPath('data.summary.count', 4)
+            ->assertJsonPath('data.summary.totalAmount', '27300.0000')
+            ->assertJsonPath('data.summary.successCount', 3)
+            ->assertJsonPath('data.summary.successAmount', '18300.0000')
+            ->assertJsonPath('data.summary.feeAmount', '1000.0000')
+            ->assertJsonPath('data.summary.netAmount', '17300.0000');
     }
 
     private function setCommission(Merchant $merchant, PaymentOperation $operation, CommissionType $type, string $value): void
