@@ -6,9 +6,11 @@ use App\Enums\PaymentOperation;
 use App\Enums\TransactionStatus;
 use App\Enums\WalletType;
 use App\Http\Resources\TransactionResource;
+use App\Http\Resources\WalletResource;
 use App\Models\Merchant;
 use App\Models\Transaction;
 use App\Models\Wallet;
+use App\Services\Merchant\CommissionFeeCalculator;
 use App\Services\Payment\TransactionHistoryService;
 use App\Services\Wallet\WalletQueryService;
 use Carbon\Carbon;
@@ -18,6 +20,7 @@ class MerchantPortalService
     public function __construct(
         private readonly WalletQueryService $walletQueryService,
         private readonly TransactionHistoryService $transactionHistoryService,
+        private readonly CommissionFeeCalculator $commissionFeeCalculator,
     ) {}
 
     /**
@@ -85,6 +88,35 @@ class MerchantPortalService
                 'currency' => $wallet->currency,
             ])->values()->all(),
             'recentTransactions' => TransactionResource::collection($recent->items())->resolve(),
+            'currency' => $merchant->default_currency,
+        ];
+    }
+
+    /**
+     * @return array{wallets: array<int, array<string, mixed>>, actualBalance: string, transactionFee: string, totalPayout: string, totalPayoutCharges: string, currency: string}
+     */
+    public function wallets(Merchant $merchant): array
+    {
+        $collections = $this->commissionFeeCalculator->successTotalsForQuery(
+            Transaction::query()
+                ->where('merchant_id', $merchant->id)
+                ->where('operation', PaymentOperation::C2bPush),
+        );
+
+        $disbursements = $this->commissionFeeCalculator->successTotalsForQuery(
+            Transaction::query()
+                ->where('merchant_id', $merchant->id)
+                ->where('operation', PaymentOperation::B2cDisbursement),
+        );
+
+        return [
+            'wallets' => WalletResource::collection(
+                $this->walletQueryService->listForMerchant($merchant),
+            )->resolve(),
+            'actualBalance' => $collections['amount'],
+            'transactionFee' => $collections['fee'],
+            'totalPayout' => $disbursements['amount'],
+            'totalPayoutCharges' => $disbursements['fee'],
             'currency' => $merchant->default_currency,
         ];
     }

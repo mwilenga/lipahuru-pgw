@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\V1\AdminMerchantFundsController;
 use App\Http\Controllers\Admin\V1\AdminMonitoringController;
 use App\Http\Controllers\Admin\V1\AdminPortalController;
 use App\Http\Controllers\Admin\V1\AdminProviderController;
+use App\Http\Controllers\Admin\V1\AdminProviderFeeRateController;
 use App\Http\Controllers\Admin\V1\AdminReportController;
 use App\Http\Controllers\Admin\V1\AdminSettlementController;
 use App\Http\Controllers\Admin\V1\AdminSettlementRequestController;
@@ -97,6 +98,11 @@ Route::prefix('admin/v1')
         Route::get('/providers', [AdminProviderController::class, 'providers']);
         Route::get('/networks', [AdminProviderController::class, 'networks']);
         Route::get('/routes', [AdminProviderController::class, 'routes']);
+
+        Route::get('/settings/provider-fee-rates', [AdminProviderFeeRateController::class, 'index']);
+        Route::post('/settings/provider-fee-rates', [AdminProviderFeeRateController::class, 'store']);
+        Route::put('/settings/provider-fee-rates/{id}', [AdminProviderFeeRateController::class, 'update']);
+        Route::delete('/settings/provider-fee-rates/{id}', [AdminProviderFeeRateController::class, 'destroy']);
 
         Route::get('/float-topups', [AdminFloatTopupController::class, 'index']);
         Route::post('/float-topups', [AdminFloatTopupController::class, 'store']);

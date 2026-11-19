@@ -13,7 +13,22 @@ class TransactionResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $fees = app(CommissionFeeCalculator::class)->forTransaction($this->resource);
+        $calculated = app(CommissionFeeCalculator::class)->forTransaction($this->resource);
+
+        $merchantFee = $this->merchant_fee_amount !== null
+            ? number_format((float) $this->merchant_fee_amount, 4, '.', '')
+            : $calculated['fee'];
+
+        $amount = number_format((float) $this->amount, 4, '.', '');
+        $net = bcsub($amount, $merchantFee, 4);
+        if (bccomp($net, '0', 4) < 0) {
+            $net = '0.0000';
+        }
+
+        $isAdmin = $request->is('api/admin/*');
+        $providerFee = $this->provider_fee_amount !== null
+            ? number_format((float) $this->provider_fee_amount, 4, '.', '')
+            : null;
 
         return [
             'transactionId' => $this->transaction_id,
@@ -25,8 +40,9 @@ class TransactionResource extends JsonResource
             'transactionStatus' => $this->status?->value,
             'providerCode' => $this->providerNetwork?->code?->value,
             'amount' => (string) $this->amount,
-            'fee' => $fees['fee'],
-            'net' => $fees['net'],
+            'fee' => $merchantFee,
+            'net' => $net,
+            'providerFee' => $this->when($isAdmin, $providerFee),
             'currency' => $this->currency,
             'msisdn' => $this->msisdn,
             'callbackUrl' => $this->callback_url,

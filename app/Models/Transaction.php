@@ -22,6 +22,9 @@ class Transaction extends Model
         'operation',
         'status',
         'amount',
+        'merchant_fee_amount',
+        'provider_fee_amount',
+        'provider_fee_rate_id',
         'currency',
         'msisdn',
         'callback_url',
@@ -41,6 +44,8 @@ class Transaction extends Model
             'operation' => PaymentOperation::class,
             'status' => TransactionStatus::class,
             'amount' => 'decimal:4',
+            'merchant_fee_amount' => 'decimal:4',
+            'provider_fee_amount' => 'decimal:4',
             'metadata' => 'array',
             'finalized_at' => 'datetime',
         ];
@@ -59,6 +64,11 @@ class Transaction extends Model
     public function paymentProvider(): BelongsTo
     {
         return $this->belongsTo(PaymentProvider::class);
+    }
+
+    public function providerFeeRate(): BelongsTo
+    {
+        return $this->belongsTo(ProviderFeeRate::class);
     }
 
     public function events(): HasMany

@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Portal;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\TransactionHistoryRequest;
 use App\Http\Resources\TransactionResource;
-use App\Http\Resources\WalletResource;
 use App\Models\Merchant;
 use App\Services\Payment\TransactionHistoryService;
 use App\Services\Portal\MerchantPortalService;
-use App\Services\Wallet\WalletQueryService;
 use App\Support\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +16,6 @@ class MerchantPortalController extends Controller
 {
     public function __construct(
         private readonly MerchantPortalService $merchantPortalService,
-        private readonly WalletQueryService $walletQueryService,
         private readonly TransactionHistoryService $transactionHistoryService,
     ) {}
 
@@ -38,7 +35,7 @@ class MerchantPortalController extends Controller
         $merchant = $request->attributes->get('merchant');
 
         return ApiResponse::success(
-            WalletResource::collection($this->walletQueryService->listForMerchant($merchant)),
+            $this->merchantPortalService->wallets($merchant),
         );
     }
 

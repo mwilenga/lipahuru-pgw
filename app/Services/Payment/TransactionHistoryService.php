@@ -83,6 +83,7 @@ class TransactionHistoryService
         return $this->summarize(
             $this->applyFilters(Transaction::query(), $filters),
             (string) config('payment-gateway.default_currency', 'TZS'),
+            includeProviderFees: true,
         );
     }
 
@@ -95,6 +96,7 @@ class TransactionHistoryService
         return $this->summarize(
             $this->applyFilters(Transaction::query()->where('merchant_id', $merchant->id), $filters),
             (string) $merchant->default_currency,
+            includeProviderFees: false,
         );
     }
 
@@ -102,21 +104,47 @@ class TransactionHistoryService
      * Charges and net only cover SUCCESS transactions; totalAmount/count cover all matching rows.
      *
      * @param  Builder<Transaction>  $query
-     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string}
+     * @return array{totalAmount: string, currency: string, count: int, successCount: int, successAmount: string, feeAmount: string, netAmount: string, providerFeeAmount?: string, netFeeAmount?: string}
      */
-    private function summarize(Builder $query, string $currency): array
+    private function summarize(Builder $query, string $currency, bool $includeProviderFees = false): array
     {
         $success = $this->commissionFeeCalculator->successTotalsForQuery($query);
+        $successful = (clone $query)->where('status', TransactionStatus::Success);
 
-        return [
+        $missingMerchantFees = (clone $successful)->whereNull('merchant_fee_amount')->count();
+        if ($success['count'] > 0 && $missingMerchantFees === 0) {
+            $feeAmount = number_format((float) (clone $successful)->sum('merchant_fee_amount'), 4, '.', '');
+            $netAmount = bcsub($success['amount'], $feeAmount, 4);
+            if (bccomp($netAmount, '0', 4) < 0) {
+                $netAmount = '0.0000';
+            }
+        } else {
+            $feeAmount = $success['fee'];
+            $netAmount = $success['net'];
+        }
+
+        $payload = [
             'totalAmount' => number_format((float) (clone $query)->sum('amount'), 4, '.', ''),
             'currency' => $currency,
             'count' => (clone $query)->count(),
             'successCount' => $success['count'],
             'successAmount' => $success['amount'],
-            'feeAmount' => $success['fee'],
-            'netAmount' => $success['net'],
+            'feeAmount' => $feeAmount,
+            'netAmount' => $netAmount,
         ];
+
+        if ($includeProviderFees) {
+            $providerFeeAmount = number_format((float) (clone $successful)->sum('provider_fee_amount'), 4, '.', '');
+            $netFeeAmount = bcsub($feeAmount, $providerFeeAmount, 4);
+            if (bccomp($netFeeAmount, '0', 4) < 0) {
+                $netFeeAmount = '0.0000';
+            }
+
+            $payload['providerFeeAmount'] = $providerFeeAmount;
+            $payload['netFeeAmount'] = $netFeeAmount;
+        }
+
+        return $payload;
     }
 
     /**
