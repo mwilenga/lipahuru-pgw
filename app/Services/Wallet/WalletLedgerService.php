@@ -53,6 +53,8 @@ class WalletLedgerService
                 'created_at' => now(),
             ]);
 
+            $this->recomputeAncestorBalances($lockedWallet);
+
             return BalanceReservation::query()->create([
                 'transaction_id' => $transaction->id,
                 'wallet_id' => $wallet->id,
@@ -110,6 +112,8 @@ class WalletLedgerService
                 'released_at' => now(),
             ]);
 
+            $this->recomputeAncestorBalances($lockedWallet);
+
             return $reservation->refresh();
         });
     }
@@ -160,6 +164,8 @@ class WalletLedgerService
                 'status' => 'CONSUMED',
                 'consumed_at' => now(),
             ]);
+
+            $this->recomputeAncestorBalances($lockedWallet);
 
             return $reservation->refresh();
         });

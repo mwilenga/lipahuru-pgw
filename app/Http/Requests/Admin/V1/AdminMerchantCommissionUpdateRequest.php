@@ -6,6 +6,7 @@ use App\Enums\CommissionType;
 use App\Enums\PaymentOperation;
 use App\Http\Requests\GatewayFormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class AdminMerchantCommissionUpdateRequest extends GatewayFormRequest
 {
@@ -36,5 +37,27 @@ class AdminMerchantCommissionUpdateRequest extends GatewayFormRequest
             ],
             'commissions.*.value' => ['required', 'numeric', 'min:0'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            foreach ($this->input('commissions', []) as $index => $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+
+                if (($item['commissionType'] ?? null) !== CommissionType::Percent->value) {
+                    continue;
+                }
+
+                if ((float) ($item['value'] ?? 0) > 100) {
+                    $validator->errors()->add(
+                        "commissions.{$index}.value",
+                        'Percent commission value may not be greater than 100.',
+                    );
+                }
+            }
+        });
     }
 }

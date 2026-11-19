@@ -9,16 +9,16 @@ class SyncParentWalletBalancesCommand extends Command
 {
     protected $signature = 'wallet:sync-parent-balances {merchantId? : Optional merchant id to scope the sync}';
 
-    protected $description = 'Reconcile merchant parent wallet balances from provider total child wallets';
+    protected $description = 'Rebuild PROVIDER_TOTAL balances from leaves, then MERCHANT_PARENT from provider totals';
 
     public function handle(WalletLedgerService $walletLedgerService): int
     {
         $merchantId = $this->argument('merchantId');
         $scopedMerchantId = $merchantId !== null ? (int) $merchantId : null;
 
-        $updated = $walletLedgerService->syncParentWalletBalances($scopedMerchantId);
+        $updated = $walletLedgerService->syncHierarchyBalances($scopedMerchantId);
 
-        $this->info("Synced {$updated} parent wallet(s).");
+        $this->info("Synced {$updated} provider-total and parent wallet(s).");
 
         return self::SUCCESS;
     }
