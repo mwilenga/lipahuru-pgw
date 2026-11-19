@@ -16,6 +16,7 @@ use App\Providers\Payment\DTOs\DisbursementRequest;
 use App\Providers\Payment\ProviderRouter;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
 use App\Repositories\Contracts\WalletRepositoryInterface;
+use App\Services\Merchant\CommissionFeeCalculator;
 use App\Services\Wallet\WalletLedgerService;
 use App\StateMachines\TransactionStateMachine;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,8 @@ class PaymentService
         private readonly TransactionStateMachine $stateMachine,
         private readonly WalletLedgerService $walletLedgerService,
         private readonly ProviderRouter $providerRouter,
+        private readonly CommissionFeeCalculator $commissionFeeCalculator,
+        private readonly TransactionFeeSnapshotter $transactionFeeSnapshotter,
     ) {}
 
     /**
@@ -168,7 +171,21 @@ class PaymentService
             $transaction = $this->stateMachine->transition($transaction, TransactionStatus::Authenticated, 'AUTHENTICATED', actor: 'gateway');
             $transaction = $this->stateMachine->transition($transaction, TransactionStatus::Validated, 'VALIDATED', actor: 'gateway');
 
-            $this->walletLedgerService->reserveFunds($disbursementWallet, $transaction, (string) $transaction->amount);
+            // Reserve payout + B2C commission; provider still receives the payout amount only.
+            $payoutAmount = number_format((float) $transaction->amount, 4, '.', '');
+            $feeAmount = number_format(
+                $this->commissionFeeCalculator->feeFor(
+                    $merchant,
+                    PaymentOperation::B2cDisbursement,
+                    (float) $payoutAmount,
+                ),
+                4,
+                '.',
+                '',
+            );
+            $reserveAmount = bcadd($payoutAmount, $feeAmount, 4);
+
+            $this->walletLedgerService->reserveFunds($disbursementWallet, $transaction, $reserveAmount);
 
             $transaction = $this->stateMachine->transition($transaction, TransactionStatus::FundsReserved, 'FUNDS_RESERVED', actor: 'gateway');
 
@@ -260,6 +277,8 @@ class PaymentService
                 actor: 'gateway',
             );
         }
+
+        $transaction = $this->transactionFeeSnapshotter->snapshot($transaction);
 
         if ($transaction->operation === PaymentOperation::B2cDisbursement) {
             $this->walletLedgerService->consumeFunds($transaction);
